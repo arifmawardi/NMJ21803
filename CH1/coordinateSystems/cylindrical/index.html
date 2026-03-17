@@ -1,1 +1,378 @@
 
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cylindrical Coordinates Visualizer</title>
+    <!-- Tailwind CSS for UI styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Three.js Library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <!-- OrbitControls -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #111827; font-family: 'Inter', sans-serif; }
+        canvas { display: block; }
+        
+        /* Floating labels style */
+        .math-label {
+            position: absolute;
+            top: 0; left: 0;
+            color: white;
+            font-weight: bold;
+            text-shadow: 1px 1px 2px black, -1px -1px 2px black, 1px -1px 2px black, -1px 1px 2px black;
+            pointer-events: none;
+            transform: translate(-50%, -50%);
+            opacity: 0; /* Hidden until positioned */
+            transition: opacity 0.2s;
+        }
+
+        /* Custom Range Slider styling */
+        input[type=range] {
+            -webkit-appearance: none;
+            width: 100%;
+            background: transparent;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 16px; width: 16px;
+            border-radius: 50%;
+            background: #ffffff;
+            cursor: pointer;
+            margin-top: -6px;
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%; height: 4px;
+            cursor: pointer;
+            background: #4b5563;
+            border-radius: 2px;
+        }
+        
+        /* Colored Tracks */
+        #r-slider::-webkit-slider-thumb { background: #06b6d4; } /* Cyan */
+        #theta-slider::-webkit-slider-thumb { background: #22c55e; } /* Green */
+        #z-slider::-webkit-slider-thumb { background: #d946ef; } /* Fuchsia */
+    </style>
+</head>
+<body>
+
+    <!-- 3D Canvas Container -->
+    <div id="canvas-container" class="absolute inset-0"></div>
+
+    <!-- 3D Floating Labels -->
+    <div id="label-p" class="math-label text-yellow-300 text-lg">P(r, θ, z)</div>
+    <div id="label-r" class="math-label text-cyan-400">r</div>
+    <div id="label-theta" class="math-label text-green-400">θ</div>
+    <div id="label-z" class="math-label text-fuchsia-400">z</div>
+    <div id="label-x-axis" class="math-label text-red-400">X</div>
+    <div id="label-y-axis" class="math-label text-green-400">Y</div>
+    <div id="label-z-axis" class="math-label text-blue-400">Z</div>
+
+    <!-- UI Overlay -->
+    <div class="absolute top-4 right-4 w-80 bg-gray-900 bg-opacity-80 backdrop-blur-md text-white p-5 rounded-xl shadow-2xl border border-gray-700">
+        <h1 class="text-xl font-bold mb-4 text-gray-100 border-b border-gray-700 pb-2">Cylindrical Coordinates</h1>
+        
+        <!-- Controls -->
+        <div class="space-y-4">
+            <!-- Radius (r) -->
+            <div>
+                <div class="flex justify-between mb-1">
+                    <label for="r-slider" class="text-cyan-400 font-semibold">Radius (r)</label>
+                    <span id="r-val" class="font-mono text-cyan-200">5.00</span>
+                </div>
+                <input type="range" id="r-slider" min="0" max="10" step="0.1" value="5">
+            </div>
+
+            <!-- Angle (theta) -->
+            <div>
+                <div class="flex justify-between mb-1">
+                    <label for="theta-slider" class="text-green-400 font-semibold">Angle (θ)</label>
+                    <span id="theta-val" class="font-mono text-green-200">45°</span>
+                </div>
+                <input type="range" id="theta-slider" min="0" max="360" step="1" value="45">
+            </div>
+
+            <!-- Height (z) -->
+            <div>
+                <div class="flex justify-between mb-1">
+                    <label for="z-slider" class="text-fuchsia-400 font-semibold">Height (z)</label>
+                    <span id="z-val" class="font-mono text-fuchsia-200">5.00</span>
+                </div>
+                <input type="range" id="z-slider" min="-10" max="10" step="0.1" value="5">
+            </div>
+        </div>
+
+        <!-- Toggles -->
+        <div class="mt-6 flex items-center justify-between">
+            <span class="text-gray-300 text-sm">Show Cylinder Surface</span>
+            <label class="relative inline-flex items-center cursor-pointer">
+                <input type="checkbox" id="cylinder-toggle" class="sr-only peer" checked>
+                <div class="w-11 h-6 bg-gray-600 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-500"></div>
+            </label>
+        </div>
+
+        <!-- Data Display -->
+        <div class="mt-6 bg-gray-800 rounded-lg p-3 text-sm space-y-2 border border-gray-700">
+            <div class="flex justify-between">
+                <span class="text-gray-400">Cartesian (x, y, z):</span>
+                <span id="cartesian-val" class="font-mono text-gray-200"></span>
+            </div>
+            <div class="text-xs text-gray-500 mt-2">
+                x = r · cos(θ)<br>
+                y = r · sin(θ)<br>
+                z = z
+            </div>
+        </div>
+    </div>
+
+    <script>
+        window.onload = function() {
+            // --- Three.js Setup ---
+            const container = document.getElementById('canvas-container');
+            const scene = new THREE.Scene();
+            // Match the background to the dark theme
+            scene.background = new THREE.Color(0x111827);
+
+            // Important: Set Z as the Up axis (Standard mathematical convention for cylindrical coords)
+            THREE.Object3D.DefaultUp.set(0, 0, 1);
+
+            const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(12, 15, 12);
+
+            const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(window.devicePixelRatio);
+            container.appendChild(renderer.domElement);
+
+            const controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.05;
+            controls.target.set(0, 0, 2);
+
+            // --- Lighting ---
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+            scene.add(ambientLight);
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.6);
+            directionalLight.position.set(10, 20, 15);
+            scene.add(directionalLight);
+
+            // --- Grid & Axes ---
+            // Create a custom grid that lies on the XY plane
+            const gridHelper = new THREE.GridHelper(20, 20, 0x374151, 0x1f2937);
+            gridHelper.rotation.x = Math.PI / 2; // Rotate to XY plane since Z is up
+            scene.add(gridHelper);
+
+            // Axes Helper (X=Red, Y=Green, Z=Blue)
+            const axesHelper = new THREE.AxesHelper(10);
+            scene.add(axesHelper);
+
+            // --- Visual Elements ---
+            // 1. The Main Point (P)
+            const pointGeo = new THREE.SphereGeometry(0.25, 32, 32);
+            const pointMat = new THREE.MeshPhongMaterial({ color: 0xfde047, emissive: 0x854d0e }); // Yellow
+            const pointMesh = new THREE.Mesh(pointGeo, pointMat);
+            scene.add(pointMesh);
+
+            // 2. Projection Point on XY Plane
+            const projPointGeo = new THREE.SphereGeometry(0.15, 16, 16);
+            const projPointMat = new THREE.MeshBasicMaterial({ color: 0x9ca3af }); // Gray
+            const projPointMesh = new THREE.Mesh(projPointGeo, projPointMat);
+            scene.add(projPointMesh);
+
+            // 3. Radius Line (Origin to Projection)
+            const radiusLineMat = new THREE.LineBasicMaterial({ color: 0x06b6d4, linewidth: 3 }); // Cyan
+            const radiusLineGeo = new THREE.BufferGeometry();
+            const radiusLine = new THREE.Line(radiusLineGeo, radiusLineMat);
+            scene.add(radiusLine);
+
+            // 4. Height Line (Projection to P)
+            const heightLineMat = new THREE.LineBasicMaterial({ color: 0xd946ef, linewidth: 3 }); // Fuchsia
+            const heightLineGeo = new THREE.BufferGeometry();
+            const heightLine = new THREE.Line(heightLineGeo, heightLineMat);
+            scene.add(heightLine);
+
+            // 5. Angle Arc (Theta)
+            const arcMat = new THREE.LineBasicMaterial({ color: 0x22c55e, linewidth: 3 }); // Green
+            const arcGeo = new THREE.BufferGeometry();
+            const arcLine = new THREE.Line(arcGeo, arcMat);
+            scene.add(arcLine);
+
+            // 6. Connecting Line from origin to X axis (Reference for Theta)
+            const refLineMat = new THREE.LineDashedMaterial({ color: 0x4ade80, dashSize: 0.5, gapSize: 0.2 });
+            const refLineGeo = new THREE.BufferGeometry();
+            refLineGeo.setFromPoints([new THREE.Vector3(0,0,0), new THREE.Vector3(5,0,0)]);
+            const refLine = new THREE.Line(refLineGeo, refLineMat);
+            refLine.computeLineDistances();
+            scene.add(refLine);
+
+            // 7. Transparent Cylinder Surface Helper
+            const cylGeo = new THREE.CylinderGeometry(1, 1, 1, 32, 1, true); // Radius 1, Height 1
+            const cylMat = new THREE.MeshBasicMaterial({ 
+                color: 0x3b82f6, 
+                transparent: true, 
+                opacity: 0.1, 
+                side: THREE.DoubleSide,
+                depthWrite: false
+            });
+            const cylinderHelper = new THREE.Mesh(cylGeo, cylMat);
+            // Three.js Cylinder runs along Y. Rotate it so it aligns with Z axis
+            cylinderHelper.rotation.x = Math.PI / 2;
+            scene.add(cylinderHelper);
+
+            // --- State Variables ---
+            let params = {
+                r: 5,
+                theta: 45, // in degrees
+                z: 5
+            };
+
+            // --- DOM Elements ---
+            const rSlider = document.getElementById('r-slider');
+            const thetaSlider = document.getElementById('theta-slider');
+            const zSlider = document.getElementById('z-slider');
+            const rVal = document.getElementById('r-val');
+            const thetaVal = document.getElementById('theta-val');
+            const zVal = document.getElementById('z-val');
+            const cartesianVal = document.getElementById('cartesian-val');
+            const cylinderToggle = document.getElementById('cylinder-toggle');
+
+            // HTML Labels
+            const labelP = document.getElementById('label-p');
+            const labelR = document.getElementById('label-r');
+            const labelTheta = document.getElementById('label-theta');
+            const labelZ = document.getElementById('label-z');
+            const labelXAxis = document.getElementById('label-x-axis');
+            const labelYAxis = document.getElementById('label-y-axis');
+            const labelZAxis = document.getElementById('label-z-axis');
+
+            // --- Update Logic ---
+            function updateGeometry() {
+                const r = params.r;
+                const thetaRad = THREE.MathUtils.degToRad(params.theta);
+                const z = params.z;
+
+                // Calculate Cartesian coordinates
+                const x = r * Math.cos(thetaRad);
+                const y = r * Math.sin(thetaRad);
+
+                // Update Points
+                pointMesh.position.set(x, y, z);
+                projPointMesh.position.set(x, y, 0);
+
+                // Update Lines
+                radiusLineGeo.setFromPoints([new THREE.Vector3(0, 0, 0), new THREE.Vector3(x, y, 0)]);
+                heightLineGeo.setFromPoints([new THREE.Vector3(x, y, 0), new THREE.Vector3(x, y, z)]);
+
+                // Update Angle Arc
+                const arcPoints = [];
+                // Visual radius of the arc
+                const arcRadius = Math.min(r * 0.4, 3); 
+                const segments = 32;
+                for (let i = 0; i <= segments; i++) {
+                    const a = (i / segments) * thetaRad;
+                    arcPoints.push(new THREE.Vector3(arcRadius * Math.cos(a), arcRadius * Math.sin(a), 0));
+                }
+                arcGeo.setFromPoints(arcPoints);
+                
+                // Update Reference Line size to match R
+                refLineGeo.setFromPoints([new THREE.Vector3(0,0,0), new THREE.Vector3(Math.max(r, arcRadius+1), 0, 0)]);
+                refLine.computeLineDistances();
+
+                // Update Cylinder Helper
+                if(cylinderToggle.checked && r > 0.01) {
+                    cylinderHelper.visible = true;
+                    // Cylinder geometry defaults to height 1, radius 1. 
+                    // Scale X and Z to radius, scale Y to height (since it's rotated)
+                    const absZ = Math.abs(z);
+                    cylinderHelper.scale.set(r, absZ > 0.01 ? absZ : 0.01, r);
+                    // Center the cylinder on the Z axis between 0 and z
+                    cylinderHelper.position.z = z / 2;
+                } else {
+                    cylinderHelper.visible = false;
+                }
+
+                // Update Text Display
+                cartesianVal.innerText = `(${x.toFixed(2)}, ${y.toFixed(2)}, ${z.toFixed(2)})`;
+            }
+
+            // Function to map 3D coordinate to 2D screen position for labels
+            function updateLabels() {
+                const tempV = new THREE.Vector3();
+
+                const projectAndSetLabel = (position, element, offset = {x:0, y:0}) => {
+                    tempV.copy(position);
+                    tempV.project(camera);
+                    
+                    // Check if object is behind camera
+                    if (tempV.z > 1) {
+                        element.style.opacity = 0;
+                        return;
+                    }
+
+                    const x = (tempV.x * .5 + .5) * window.innerWidth;
+                    const y = (tempV.y * -.5 + .5) * window.innerHeight;
+
+                    element.style.transform = `translate(-50%, -50%) translate(${x + offset.x}px, ${y + offset.y}px)`;
+                    element.style.opacity = 1;
+                };
+
+                // P position
+                projectAndSetLabel(pointMesh.position, labelP, {x: 10, y: -20});
+                
+                // Radius midpoint
+                projectAndSetLabel(new THREE.Vector3(pointMesh.position.x/2, pointMesh.position.y/2, 0), labelR, {x: 0, y: -15});
+                
+                // Height midpoint
+                projectAndSetLabel(new THREE.Vector3(pointMesh.position.x, pointMesh.position.y, pointMesh.position.z/2), labelZ, {x: 15, y: 0});
+                
+                // Theta Arc midpoint
+                const arcRad = Math.min(params.r * 0.4, 3) + 0.3; // slightly outside arc
+                const midTheta = THREE.MathUtils.degToRad(params.theta / 2);
+                projectAndSetLabel(new THREE.Vector3(arcRad * Math.cos(midTheta), arcRad * Math.sin(midTheta), 0), labelTheta);
+
+                // Axes labels
+                projectAndSetLabel(new THREE.Vector3(10.5, 0, 0), labelXAxis);
+                projectAndSetLabel(new THREE.Vector3(0, 10.5, 0), labelYAxis);
+                projectAndSetLabel(new THREE.Vector3(0, 0, 10.5), labelZAxis);
+            }
+
+            // --- Event Listeners ---
+            function onSliderChange() {
+                params.r = parseFloat(rSlider.value);
+                params.theta = parseFloat(thetaSlider.value);
+                params.z = parseFloat(zSlider.value);
+
+                rVal.innerText = params.r.toFixed(2);
+                thetaVal.innerText = params.theta + '°';
+                zVal.innerText = params.z.toFixed(2);
+
+                updateGeometry();
+            }
+
+            rSlider.addEventListener('input', onSliderChange);
+            thetaSlider.addEventListener('input', onSliderChange);
+            zSlider.addEventListener('input', onSliderChange);
+            cylinderToggle.addEventListener('change', updateGeometry);
+
+            window.addEventListener('resize', () => {
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+            });
+
+            // --- Animation Loop ---
+            function animate() {
+                requestAnimationFrame(animate);
+                controls.update();
+                updateLabels();
+                renderer.render(scene, camera);
+            }
+
+            // Initialization
+            updateGeometry();
+            animate();
+        };
+    </script>
+</body>
+</html>
