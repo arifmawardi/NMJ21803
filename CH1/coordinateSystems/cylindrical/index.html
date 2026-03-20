@@ -137,7 +137,7 @@
             // Important: Set Z as the Up axis (Standard mathematical convention for cylindrical coords)
             THREE.Object3D.DefaultUp.set(0, 0, 1);
 
-            const camera = new THREE.PerspectiveCamera(40, window.innerWidth / window.innerHeight, 0.1, 1000);
+            const camera = new THREE.PerspectiveCamera(25, window.innerWidth / window.innerHeight, 0.1, 1000);
             camera.position.set(36, 16, 20);
 
             const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
