@@ -67,8 +67,13 @@
     <div id="label-x-axis" class="math-label text-red-400">X</div>
     <div id="label-y-axis" class="math-label text-green-400">Y</div>
     <div id="label-z-axis" class="math-label text-blue-400">Z</div>
+    
+    <!-- Unit Vector Labels -->
+    <div id="label-ur" class="math-label text-cyan-300 text-xl italic">r̂</div>
+    <div id="label-uphi" class="math-label text-green-300 text-xl italic">ϕ̂</div>
+    <div id="label-uz" class="math-label text-fuchsia-300 text-xl italic">ẑ</div>
 
-    <!-- UI Overlay (Moved to top-left) -->
+    <!-- UI Overlay -->
     <div class="absolute top-4 left-4 w-64 bg-gray-900 bg-opacity-80 backdrop-blur-md text-white p-4 rounded-xl shadow-2xl border border-gray-700">
         <h1 class="text-lg font-bold mb-3 text-gray-100 border-b border-gray-700 pb-2">Cylindrical Coordinates</h1>
         
@@ -103,12 +108,21 @@
         </div>
 
         <!-- Toggles -->
-        <div class="mt-4 flex items-center justify-between">
-            <span class="text-gray-300 text-xs">Show Cylinder Surface</span>
-            <label class="relative inline-flex items-center cursor-pointer">
-                <input type="checkbox" id="cylinder-toggle" class="sr-only peer" checked>
-                <div class="w-9 h-5 bg-gray-600 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-500"></div>
-            </label>
+        <div class="mt-4 space-y-2">
+            <div class="flex items-center justify-between">
+                <span class="text-gray-300 text-xs">Show Cylinder Surface</span>
+                <label class="relative inline-flex items-center cursor-pointer">
+                    <input type="checkbox" id="cylinder-toggle" class="sr-only peer" checked>
+                    <div class="w-9 h-5 bg-gray-600 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-500"></div>
+                </label>
+            </div>
+            <div class="flex items-center justify-between">
+                <span class="text-gray-300 text-xs">Show Unit Vectors</span>
+                <label class="relative inline-flex items-center cursor-pointer">
+                    <input type="checkbox" id="vectors-toggle" class="sr-only peer" checked>
+                    <div class="w-9 h-5 bg-gray-600 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-500"></div>
+                </label>
+            </div>
         </div>
     </div>
 
@@ -178,7 +192,7 @@
             const heightLine = new THREE.Line(heightLineGeo, heightLineMat);
             scene.add(heightLine);
 
-            // 5. Angle Arc (Theta)
+            // 5. Angle Arc (Theta/Phi)
             const arcMat = new THREE.LineBasicMaterial({ color: 0x22c55e, linewidth: 3 }); // Green
             const arcGeo = new THREE.BufferGeometry();
             const arcLine = new THREE.Line(arcGeo, arcMat);
@@ -206,6 +220,27 @@
             cylinderHelper.rotation.x = Math.PI / 2;
             scene.add(cylinderHelper);
 
+            // 8. Unit Vectors (e_r, e_phi, e_z)
+            const arrowLength = 2.0;
+            const arrowHeadLength = 0.4;
+            const arrowHeadWidth = 0.25;
+            
+            // Radial unit vector (Cyan)
+            const arrowR = new THREE.ArrowHelper(new THREE.Vector3(1,0,0), new THREE.Vector3(0,0,0), arrowLength, 0x06b6d4, arrowHeadLength, arrowHeadWidth);
+            // Tangential unit vector (Green)
+            const arrowPhi = new THREE.ArrowHelper(new THREE.Vector3(0,1,0), new THREE.Vector3(0,0,0), arrowLength, 0x22c55e, arrowHeadLength, arrowHeadWidth);
+            // Z unit vector (Fuchsia)
+            const arrowZ = new THREE.ArrowHelper(new THREE.Vector3(0,0,1), new THREE.Vector3(0,0,0), arrowLength, 0xd946ef, arrowHeadLength, arrowHeadWidth);
+            
+            // Thicken the lines of the arrows for better visibility
+            arrowR.line.material.linewidth = 2;
+            arrowPhi.line.material.linewidth = 2;
+            arrowZ.line.material.linewidth = 2;
+
+            scene.add(arrowR);
+            scene.add(arrowPhi);
+            scene.add(arrowZ);
+
             // --- State Variables ---
             let params = {
                 r: 5,
@@ -221,6 +256,7 @@
             const phiVal = document.getElementById('phi-val');
             const zVal = document.getElementById('z-val');
             const cylinderToggle = document.getElementById('cylinder-toggle');
+            const vectorsToggle = document.getElementById('vectors-toggle');
 
             // HTML Labels
             const labelP = document.getElementById('label-p');
@@ -230,6 +266,9 @@
             const labelXAxis = document.getElementById('label-x-axis');
             const labelYAxis = document.getElementById('label-y-axis');
             const labelZAxis = document.getElementById('label-z-axis');
+            const labelUr = document.getElementById('label-ur');
+            const labelUphi = document.getElementById('label-uphi');
+            const labelUz = document.getElementById('label-uz');
 
             // --- Update Logic ---
             function updateGeometry() {
@@ -241,13 +280,15 @@
                 const x = r * Math.cos(phiRad);
                 const y = r * Math.sin(phiRad);
 
+                const currentP = new THREE.Vector3(x, y, z);
+
                 // Update Points
-                pointMesh.position.set(x, y, z);
+                pointMesh.position.copy(currentP);
                 projPointMesh.position.set(x, y, 0);
 
                 // Update Lines
                 radiusLineGeo.setFromPoints([new THREE.Vector3(0, 0, 0), new THREE.Vector3(x, y, 0)]);
-                heightLineGeo.setFromPoints([new THREE.Vector3(x, y, 0), new THREE.Vector3(x, y, z)]);
+                heightLineGeo.setFromPoints([new THREE.Vector3(x, y, 0), currentP]);
 
                 // Update Angle Arc
                 const arcPoints = [];
@@ -267,14 +308,39 @@
                 // Update Cylinder Helper
                 if(cylinderToggle.checked && r > 0.01) {
                     cylinderHelper.visible = true;
-                    // Cylinder geometry defaults to height 1, radius 1. 
-                    // Scale X and Z to radius, scale Y to height (since it's rotated)
                     const absZ = Math.abs(z);
                     cylinderHelper.scale.set(r, absZ > 0.01 ? absZ : 0.01, r);
-                    // Center the cylinder on the Z axis between 0 and z
                     cylinderHelper.position.z = z / 2;
                 } else {
                     cylinderHelper.visible = false;
+                }
+
+                // Update Unit Vectors
+                if (vectorsToggle.checked) {
+                    arrowR.visible = true;
+                    arrowPhi.visible = true;
+                    arrowZ.visible = true;
+
+                    // Direction of e_r: (cos(phi), sin(phi), 0)
+                    const dirR = new THREE.Vector3(Math.cos(phiRad), Math.sin(phiRad), 0).normalize();
+                    // Direction of e_phi: (-sin(phi), cos(phi), 0)
+                    const dirPhi = new THREE.Vector3(-Math.sin(phiRad), Math.cos(phiRad), 0).normalize();
+                    // Direction of e_z: (0, 0, 1)
+                    const dirZ = new THREE.Vector3(0, 0, 1);
+
+                    // All vectors originate from point P
+                    arrowR.position.copy(currentP);
+                    arrowR.setDirection(dirR);
+
+                    arrowPhi.position.copy(currentP);
+                    arrowPhi.setDirection(dirPhi);
+
+                    arrowZ.position.copy(currentP);
+                    arrowZ.setDirection(dirZ);
+                } else {
+                    arrowR.visible = false;
+                    arrowPhi.visible = false;
+                    arrowZ.visible = false;
                 }
             }
 
@@ -299,17 +365,13 @@
                     element.style.opacity = 1;
                 };
 
-                // P position
-                projectAndSetLabel(pointMesh.position, labelP, {x: 10, y: -20});
-                
-                // Radius midpoint
+                // Main Point and Coordinatess
+                projectAndSetLabel(pointMesh.position, labelP, {x: 15, y: -25});
                 projectAndSetLabel(new THREE.Vector3(pointMesh.position.x/2, pointMesh.position.y/2, 0), labelR, {x: 0, y: -15});
-                
-                // Height midpoint
                 projectAndSetLabel(new THREE.Vector3(pointMesh.position.x, pointMesh.position.y, pointMesh.position.z/2), labelZ, {x: 15, y: 0});
                 
                 // Phi Arc midpoint
-                const arcRad = Math.min(params.r * 0.4, 3) + 0.3; // slightly outside arc
+                const arcRad = Math.min(params.r * 0.4, 3) + 0.3; 
                 const midPhi = THREE.MathUtils.degToRad(params.phi / 2);
                 projectAndSetLabel(new THREE.Vector3(arcRad * Math.cos(midPhi), arcRad * Math.sin(midPhi), 0), labelPhi);
 
@@ -317,6 +379,44 @@
                 projectAndSetLabel(new THREE.Vector3(10.5, 0, 0), labelXAxis);
                 projectAndSetLabel(new THREE.Vector3(0, 10.5, 0), labelYAxis);
                 projectAndSetLabel(new THREE.Vector3(0, 0, 10.5), labelZAxis);
+
+                // Unit Vector Labels
+                if (vectorsToggle.checked) {
+                    // Position labels slightly beyond the tips of the arrows
+                    const tipOffset = arrowLength + 0.3;
+                    const p = pointMesh.position;
+                    const phiRad = THREE.MathUtils.degToRad(params.phi);
+
+                    // Calculate direction vectors explicitly
+                    const dirR = new THREE.Vector3(Math.cos(phiRad), Math.sin(phiRad), 0).normalize();
+                    const dirPhi = new THREE.Vector3(-Math.sin(phiRad), Math.cos(phiRad), 0).normalize();
+                    const dirZ = new THREE.Vector3(0, 0, 1);
+
+                    // Use standard arithmetic addition instead of addScaledVector to avoid any prototype errors
+                    const tipR = new THREE.Vector3(
+                        p.x + dirR.x * tipOffset,
+                        p.y + dirR.y * tipOffset,
+                        p.z + dirR.z * tipOffset
+                    );
+                    const tipPhi = new THREE.Vector3(
+                        p.x + dirPhi.x * tipOffset,
+                        p.y + dirPhi.y * tipOffset,
+                        p.z + dirPhi.z * tipOffset
+                    );
+                    const tipZ = new THREE.Vector3(
+                        p.x + dirZ.x * tipOffset,
+                        p.y + dirZ.y * tipOffset,
+                        p.z + dirZ.z * tipOffset
+                    );
+
+                    projectAndSetLabel(tipR, labelUr);
+                    projectAndSetLabel(tipPhi, labelUphi);
+                    projectAndSetLabel(tipZ, labelUz);
+                } else {
+                    labelUr.style.opacity = 0;
+                    labelUphi.style.opacity = 0;
+                    labelUz.style.opacity = 0;
+                }
             }
 
             // --- Event Listeners ---
@@ -336,6 +436,7 @@
             phiSlider.addEventListener('input', onSliderChange);
             zSlider.addEventListener('input', onSliderChange);
             cylinderToggle.addEventListener('change', updateGeometry);
+            vectorsToggle.addEventListener('change', updateGeometry);
 
             window.addEventListener('resize', () => {
                 camera.aspect = window.innerWidth / window.innerHeight;
