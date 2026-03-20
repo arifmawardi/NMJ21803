@@ -1,1 +1,417 @@
 
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cartesian Coordinates Visualizer</title>
+    <!-- Tailwind CSS for UI styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Three.js Library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <!-- OrbitControls -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #111827; font-family: 'Inter', sans-serif; }
+        canvas { display: block; }
+        
+        /* Floating labels style */
+        .math-label {
+            position: absolute;
+            top: 0; left: 0;
+            color: white;
+            font-weight: bold;
+            text-shadow: 1px 1px 2px black, -1px -1px 2px black, 1px -1px 2px black, -1px 1px 2px black;
+            pointer-events: none;
+            transform: translate(-50%, -50%);
+            opacity: 0; /* Hidden until positioned */
+            transition: opacity 0.2s;
+        }
+
+        /* Custom Range Slider styling */
+        input[type=range] {
+            -webkit-appearance: none;
+            width: 100%;
+            background: transparent;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 12px; width: 12px;
+            border-radius: 50%;
+            background: #ffffff;
+            cursor: pointer;
+            margin-top: -4px;
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%; height: 4px;
+            cursor: pointer;
+            background: #4b5563;
+            border-radius: 2px;
+        }
+        
+        /* Colored Tracks */
+        #x-slider::-webkit-slider-thumb { background: #ef4444; } /* Red */
+        #y-slider::-webkit-slider-thumb { background: #22c55e; } /* Green */
+        #z-slider::-webkit-slider-thumb { background: #3b82f6; } /* Blue */
+    </style>
+</head>
+<body>
+
+    <!-- 3D Canvas Container -->
+    <div id="canvas-container" class="absolute inset-0"></div>
+
+    <!-- 3D Floating Labels -->
+    <div id="label-p" class="math-label text-yellow-300 text-lg">P(X, Y, Z)</div>
+    <div id="label-x-dist" class="math-label text-red-400">X</div>
+    <div id="label-y-dist" class="math-label text-green-400">Y</div>
+    <div id="label-z-dist" class="math-label text-blue-400">Z</div>
+    
+    <!-- Axis Labels -->
+    <div id="label-x-axis" class="math-label text-red-500 text-xl">X</div>
+    <div id="label-y-axis" class="math-label text-green-500 text-xl">Y</div>
+    <div id="label-z-axis" class="math-label text-blue-500 text-xl">Z</div>
+    
+    <!-- Unit Vector Labels -->
+    <div id="label-ux" class="math-label text-red-300 text-xl italic">x̂</div>
+    <div id="label-uy" class="math-label text-green-300 text-xl italic">ŷ</div>
+    <div id="label-uz" class="math-label text-blue-300 text-xl italic">ẑ</div>
+
+    <!-- UI Overlay -->
+    <div class="absolute top-4 left-4 w-72 bg-gray-900 bg-opacity-80 backdrop-blur-md text-white p-4 rounded-xl shadow-2xl border border-gray-700">
+        <h1 class="text-lg font-bold mb-3 text-gray-100 border-b border-gray-700 pb-2">Cartesian Coordinates</h1>
+        
+        <!-- Controls -->
+        <div class="space-y-4 text-sm">
+            <!-- X Coordinate -->
+            <div>
+                <div class="flex justify-between mb-0.5">
+                    <label for="x-slider" class="text-red-400 font-semibold">X-Axis Position</label>
+                    <span id="x-val" class="font-mono text-red-200">5.50</span>
+                </div>
+                <input type="range" id="x-slider" min="-10" max="10" step="0.5" value="5.5">
+            </div>
+
+            <!-- Y Coordinate -->
+            <div>
+                <div class="flex justify-between mb-0.5">
+                    <label for="y-slider" class="text-green-400 font-semibold">Y-Axis Position</label>
+                    <span id="y-val" class="font-mono text-green-200">6.50</span>
+                </div>
+                <input type="range" id="y-slider" min="-10" max="10" step="0.5" value="6.5">
+            </div>
+
+            <!-- Z Coordinate -->
+            <div>
+                <div class="flex justify-between mb-0.5">
+                    <label for="z-slider" class="text-blue-400 font-semibold">Z-Axis Position</label>
+                    <span id="z-val" class="font-mono text-blue-200">6.00</span>
+                </div>
+                <input type="range" id="z-slider" min="-10" max="10" step="0.5" value="6">
+            </div>
+        </div>
+
+        <!-- Toggles -->
+        <div class="mt-5 space-y-3">
+            <div class="flex items-center justify-between">
+                <span class="text-gray-300 text-xs font-medium">Show Bounding Box</span>
+                <label class="relative inline-flex items-center cursor-pointer">
+                    <input type="checkbox" id="box-toggle" class="sr-only peer" checked>
+                    <div class="w-9 h-5 bg-gray-600 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-purple-500"></div>
+                </label>
+            </div>
+            <div class="flex items-center justify-between">
+                <span class="text-gray-300 text-xs font-medium">Show Unit Vectors</span>
+                <label class="relative inline-flex items-center cursor-pointer">
+                    <input type="checkbox" id="vectors-toggle" class="sr-only peer" checked>
+                    <div class="w-9 h-5 bg-gray-600 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-purple-500"></div>
+                </label>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        window.onload = function() {
+            // --- Three.js Setup ---
+            const container = document.getElementById('canvas-container');
+            const scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x111827);
+
+            // Z is the Up axis
+            THREE.Object3D.DefaultUp.set(0, 0, 1);
+
+            const camera = new THREE.PerspectiveCamera(40, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(36, 16, 20);
+
+            const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(window.devicePixelRatio);
+            container.appendChild(renderer.domElement);
+
+            const controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.05;
+            controls.target.set(0, 0, 0);
+
+            // --- Lighting ---
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+            scene.add(ambientLight);
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            directionalLight.position.set(10, 20, 15);
+            scene.add(directionalLight);
+
+            // --- Grid & Axes ---
+            const gridHelper = new THREE.GridHelper(20, 20, 0x374151, 0x1f2937);
+            gridHelper.rotation.x = Math.PI / 2; // Rotate to XY plane
+            scene.add(gridHelper);
+
+            // Main coordinate axes
+            const axisLength = 12;
+            const axesHelper = new THREE.AxesHelper(axisLength);
+            // Three.js AxesHelper colors: X=Red, Y=Green, Z=Blue
+            scene.add(axesHelper);
+
+            // --- Visual Elements ---
+            // 1. The Main Point (P)
+            const pointGeo = new THREE.SphereGeometry(0.3, 32, 32);
+            const pointMat = new THREE.MeshPhongMaterial({ color: 0xfde047, emissive: 0x854d0e }); // Yellow
+            const pointMesh = new THREE.Mesh(pointGeo, pointMat);
+            scene.add(pointMesh);
+
+            // 2. Thick lines indicating the Cartesian path (Origin -> X -> Y -> Z)
+            const lineXMat = new THREE.LineBasicMaterial({ color: 0xef4444, linewidth: 3 }); // Red
+            const lineYMat = new THREE.LineBasicMaterial({ color: 0x22c55e, linewidth: 3 }); // Green
+            const lineZMat = new THREE.LineBasicMaterial({ color: 0x3b82f6, linewidth: 3 }); // Blue
+
+            const lineXGeo = new THREE.BufferGeometry();
+            const lineYGeo = new THREE.BufferGeometry();
+            const lineZGeo = new THREE.BufferGeometry();
+
+            const lineX = new THREE.Line(lineXGeo, lineXMat);
+            const lineY = new THREE.Line(lineYGeo, lineYMat);
+            const lineZ = new THREE.Line(lineZGeo, lineZMat);
+
+            scene.add(lineX);
+            scene.add(lineY);
+            scene.add(lineZ);
+
+            // 3. Bounding Box (Dashed Lines to show projections to planes)
+            const dashedMat = new THREE.LineDashedMaterial({ color: 0x9ca3af, dashSize: 0.3, gapSize: 0.15 });
+            const boxGeo = new THREE.BufferGeometry();
+            const boxLines = new THREE.LineSegments(boxGeo, dashedMat);
+            scene.add(boxLines);
+
+            // 4. Origin to P direct distance (Optional, keeping it subtle)
+            const directGeo = new THREE.BufferGeometry();
+            const directMat = new THREE.LineDashedMaterial({ color: 0x6b7280, dashSize: 0.2, gapSize: 0.2, opacity: 0.5, transparent: true });
+            const directLine = new THREE.Line(directGeo, directMat);
+            scene.add(directLine);
+
+            // 5. Unit Vectors (ex, ey, ez)
+            const arrowLength = 2.0;
+            const arrowHeadLength = 0.5;
+            const arrowHeadWidth = 0.3;
+            
+            // X unit vector (Red)
+            const arrowX = new THREE.ArrowHelper(new THREE.Vector3(1,0,0), new THREE.Vector3(0,0,0), arrowLength, 0xef4444, arrowHeadLength, arrowHeadWidth);
+            // Y unit vector (Green)
+            const arrowY = new THREE.ArrowHelper(new THREE.Vector3(0,1,0), new THREE.Vector3(0,0,0), arrowLength, 0x22c55e, arrowHeadLength, arrowHeadWidth);
+            // Z unit vector (Blue)
+            const arrowZ = new THREE.ArrowHelper(new THREE.Vector3(0,0,1), new THREE.Vector3(0,0,0), arrowLength, 0x3b82f6, arrowHeadLength, arrowHeadWidth);
+            
+            scene.add(arrowX);
+            scene.add(arrowY);
+            scene.add(arrowZ);
+
+            // --- State Variables ---
+            let params = {
+                x: 5.5,
+                y: 6.5,
+                z: 6.0
+            };
+
+            // --- DOM Elements ---
+            const xSlider = document.getElementById('x-slider');
+            const ySlider = document.getElementById('y-slider');
+            const zSlider = document.getElementById('z-slider');
+            const xVal = document.getElementById('x-val');
+            const yVal = document.getElementById('y-val');
+            const zVal = document.getElementById('z-val');
+            const boxToggle = document.getElementById('box-toggle');
+            const vectorsToggle = document.getElementById('vectors-toggle');
+
+            // HTML Labels
+            const labelP = document.getElementById('label-p');
+            const labelXDist = document.getElementById('label-x-dist');
+            const labelYDist = document.getElementById('label-y-dist');
+            const labelZDist = document.getElementById('label-z-dist');
+            const labelXAxis = document.getElementById('label-x-axis');
+            const labelYAxis = document.getElementById('label-y-axis');
+            const labelZAxis = document.getElementById('label-z-axis');
+            const labelUx = document.getElementById('label-ux');
+            const labelUy = document.getElementById('label-uy');
+            const labelUz = document.getElementById('label-uz');
+
+            // --- Update Logic ---
+            function updateGeometry() {
+                const { x, y, z } = params;
+
+                const origin = new THREE.Vector3(0, 0, 0);
+                const pX = new THREE.Vector3(x, 0, 0);
+                const pXY = new THREE.Vector3(x, y, 0);
+                const p = new THREE.Vector3(x, y, z);
+
+                // Update Point
+                pointMesh.position.copy(p);
+
+                // Update Path Lines
+                lineXGeo.setFromPoints([origin, pX]);
+                lineYGeo.setFromPoints([pX, pXY]);
+                lineZGeo.setFromPoints([pXY, p]);
+
+                // Update Direct Line
+                directGeo.setFromPoints([origin, p]);
+                directLine.computeLineDistances();
+
+                // Update Bounding Box
+                if(boxToggle.checked) {
+                    boxLines.visible = true;
+                    // The other edges of the cuboid that complete the shape
+                    const boxPoints = [
+                        // Bottom Face completing lines
+                        origin, new THREE.Vector3(0, y, 0),
+                        new THREE.Vector3(0, y, 0), pXY,
+                        // Top Face
+                        new THREE.Vector3(0, 0, z), new THREE.Vector3(x, 0, z),
+                        new THREE.Vector3(x, 0, z), p,
+                        p, new THREE.Vector3(0, y, z),
+                        new THREE.Vector3(0, y, z), new THREE.Vector3(0, 0, z),
+                        // Vertical Pillars
+                        new THREE.Vector3(x, 0, 0), new THREE.Vector3(x, 0, z),
+                        new THREE.Vector3(0, y, 0), new THREE.Vector3(0, y, z),
+                        origin, new THREE.Vector3(0, 0, z)
+                    ];
+                    boxGeo.setFromPoints(boxPoints);
+                    boxLines.computeLineDistances(); // Crucial for dashed lines
+                } else {
+                    boxLines.visible = false;
+                }
+
+                // Update Unit Vectors
+                if (vectorsToggle.checked) {
+                    arrowX.visible = true;
+                    arrowY.visible = true;
+                    arrowZ.visible = true;
+
+                    // In Cartesian coordinates, unit vectors have constant directions
+                    const dirX = new THREE.Vector3(Math.sign(x) || 1, 0, 0);
+                    const dirY = new THREE.Vector3(0, Math.sign(y) || 1, 0);
+                    const dirZ = new THREE.Vector3(0, 0, Math.sign(z) || 1);
+
+                    // Position vectors at P
+                    arrowX.position.copy(p);
+                    arrowX.setDirection(new THREE.Vector3(1, 0, 0));
+                    
+                    arrowY.position.copy(p);
+                    arrowY.setDirection(new THREE.Vector3(0, 1, 0));
+                    
+                    arrowZ.position.copy(p);
+                    arrowZ.setDirection(new THREE.Vector3(0, 0, 1));
+                } else {
+                    arrowX.visible = false;
+                    arrowY.visible = false;
+                    arrowZ.visible = false;
+                }
+            }
+
+            // Function to map 3D coordinate to 2D screen position for labels
+            function updateLabels() {
+                const tempV = new THREE.Vector3();
+
+                const projectAndSetLabel = (position, element, offset = {x:0, y:0}) => {
+                    tempV.copy(position);
+                    tempV.project(camera);
+                    
+                    // Check if object is behind camera
+                    if (tempV.z > 1) {
+                        element.style.opacity = 0;
+                        return;
+                    }
+
+                    const screenX = (tempV.x * .5 + .5) * window.innerWidth;
+                    const screenY = (tempV.y * -.5 + .5) * window.innerHeight;
+
+                    element.style.transform = `translate(-50%, -50%) translate(${screenX + offset.x}px, ${screenY + offset.y}px)`;
+                    element.style.opacity = 1;
+                };
+
+                const { x, y, z } = params;
+
+                // Main Point
+                projectAndSetLabel(pointMesh.position, labelP, {x: 25, y: -25});
+                labelP.innerText = `P(${x.toFixed(1)}, ${y.toFixed(1)}, ${z.toFixed(1)})`;
+                
+                // Distance Midpoints for X, Y, Z segments
+                projectAndSetLabel(new THREE.Vector3(x/2, 0, 0), labelXDist, {x: 0, y: 15});
+                projectAndSetLabel(new THREE.Vector3(x, y/2, 0), labelYDist, {x: 15, y: 0});
+                projectAndSetLabel(new THREE.Vector3(x, y, z/2), labelZDist, {x: 15, y: 0});
+                
+                // Axis labels
+                projectAndSetLabel(new THREE.Vector3(axisLength + 1, 0, 0), labelXAxis);
+                projectAndSetLabel(new THREE.Vector3(0, axisLength + 1, 0), labelYAxis);
+                projectAndSetLabel(new THREE.Vector3(0, 0, axisLength + 1), labelZAxis);
+
+                // Unit Vector Labels
+                if (vectorsToggle.checked) {
+                    const tipOffset = arrowLength + 0.4;
+                    const p = pointMesh.position;
+                    
+                    projectAndSetLabel(new THREE.Vector3(p.x + tipOffset, p.y, p.z), labelUx);
+                    projectAndSetLabel(new THREE.Vector3(p.x, p.y + tipOffset, p.z), labelUy);
+                    projectAndSetLabel(new THREE.Vector3(p.x, p.y, p.z + tipOffset), labelUz);
+                } else {
+                    labelUx.style.opacity = 0;
+                    labelUy.style.opacity = 0;
+                    labelUz.style.opacity = 0;
+                }
+            }
+
+            // --- Event Listeners ---
+            function onSliderChange() {
+                params.x = parseFloat(xSlider.value);
+                params.y = parseFloat(ySlider.value);
+                params.z = parseFloat(zSlider.value);
+
+                xVal.innerText = params.x.toFixed(2);
+                yVal.innerText = params.y.toFixed(2);
+                zVal.innerText = params.z.toFixed(2);
+
+                updateGeometry();
+            }
+
+            xSlider.addEventListener('input', onSliderChange);
+            ySlider.addEventListener('input', onSliderChange);
+            zSlider.addEventListener('input', onSliderChange);
+            boxToggle.addEventListener('change', updateGeometry);
+            vectorsToggle.addEventListener('change', updateGeometry);
+
+            window.addEventListener('resize', () => {
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+            });
+
+            // --- Animation Loop ---
+            function animate() {
+                requestAnimationFrame(animate);
+                controls.update();
+                updateLabels();
+                renderer.render(scene, camera);
+            }
+
+            // Initialization
+            updateGeometry();
+            animate();
+        };
+    </script>
+</body>
+</html>
