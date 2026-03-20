@@ -1,1 +1,511 @@
 
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Spherical Coordinates Visualizer</title>
+    <!-- Tailwind CSS for UI styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Three.js Library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <!-- OrbitControls -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #111827; font-family: 'Inter', sans-serif; }
+        canvas { display: block; }
+        
+        /* Floating labels style */
+        .math-label {
+            position: absolute;
+            top: 0; left: 0;
+            color: white;
+            font-weight: bold;
+            text-shadow: 1px 1px 2px black, -1px -1px 2px black, 1px -1px 2px black, -1px 1px 2px black;
+            pointer-events: none;
+            transform: translate(-50%, -50%);
+            opacity: 0; /* Hidden until positioned */
+            transition: opacity 0.2s;
+        }
+
+        /* Custom Range Slider styling */
+        input[type=range] {
+            -webkit-appearance: none;
+            width: 100%;
+            background: transparent;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 12px; width: 12px;
+            border-radius: 50%;
+            background: #ffffff;
+            cursor: pointer;
+            margin-top: -4px;
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%; height: 4px;
+            cursor: pointer;
+            background: #4b5563;
+            border-radius: 2px;
+        }
+        
+        /* Colored Tracks */
+        #r-slider::-webkit-slider-thumb { background: #06b6d4; } /* Cyan */
+        #theta-slider::-webkit-slider-thumb { background: #f59e0b; } /* Amber */
+        #phi-slider::-webkit-slider-thumb { background: #22c55e; } /* Green */
+    </style>
+</head>
+<body>
+
+    <!-- 3D Canvas Container -->
+    <div id="canvas-container" class="absolute inset-0"></div>
+
+    <!-- 3D Floating Labels -->
+    <div id="label-p" class="math-label text-yellow-300 text-lg">P(R, θ, ϕ)</div>
+    <div id="label-r" class="math-label text-cyan-400">R</div>
+    <div id="label-theta" class="math-label text-amber-400">θ</div>
+    <div id="label-phi" class="math-label text-green-400">ϕ</div>
+    <div id="label-x-axis" class="math-label text-red-400">X</div>
+    <div id="label-y-axis" class="math-label text-green-400">Y</div>
+    <div id="label-z-axis" class="math-label text-blue-400">Z</div>
+    
+    <!-- Unit Vector Labels -->
+    <div id="label-ur" class="math-label text-cyan-300 text-xl italic">R̂</div>
+    <div id="label-utheta" class="math-label text-amber-300 text-xl italic">θ̂</div>
+    <div id="label-uphi" class="math-label text-green-300 text-xl italic">ϕ̂</div>
+
+    <!-- UI Overlay -->
+    <div class="absolute top-4 left-4 w-64 bg-gray-900 bg-opacity-80 backdrop-blur-md text-white p-4 rounded-xl shadow-2xl border border-gray-700">
+        <h1 class="text-lg font-bold mb-3 text-gray-100 border-b border-gray-700 pb-2">Spherical Coordinates</h1>
+        
+        <!-- Controls -->
+        <div class="space-y-3 text-sm">
+            <!-- Radius (R) -->
+            <div>
+                <div class="flex justify-between mb-0.5">
+                    <label for="r-slider" class="text-cyan-400 font-semibold">R</label>
+                    <span id="r-val" class="font-mono text-cyan-200">6.00</span>
+                </div>
+                <input type="range" id="r-slider" min="0.1" max="10" step="0.1" value="6">
+            </div>
+
+            <!-- Polar Angle (theta) -->
+            <div>
+                <div class="flex justify-between mb-0.5">
+                    <label for="theta-slider" class="text-amber-400 font-semibold">θ (Polar)</label>
+                    <span id="theta-val" class="font-mono text-amber-200">45°</span>
+                </div>
+                <input type="range" id="theta-slider" min="0" max="180" step="1" value="45">
+            </div>
+
+            <!-- Azimuthal Angle (phi) -->
+            <div>
+                <div class="flex justify-between mb-0.5">
+                    <label for="phi-slider" class="text-green-400 font-semibold">ϕ (Azimuth)</label>
+                    <span id="phi-val" class="font-mono text-green-200">60°</span>
+                </div>
+                <input type="range" id="phi-slider" min="0" max="360" step="1" value="60">
+            </div>
+        </div>
+
+        <!-- Toggles -->
+        <div class="mt-4 space-y-2">
+            <div class="flex items-center justify-between">
+                <span class="text-gray-300 text-xs">Show Sphere Surface</span>
+                <label class="relative inline-flex items-center cursor-pointer">
+                    <input type="checkbox" id="sphere-toggle" class="sr-only peer" checked>
+                    <div class="w-9 h-5 bg-gray-600 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-500"></div>
+                </label>
+            </div>
+            <div class="flex items-center justify-between">
+                <span class="text-gray-300 text-xs">Show Unit Vectors</span>
+                <label class="relative inline-flex items-center cursor-pointer">
+                    <input type="checkbox" id="vectors-toggle" class="sr-only peer" checked>
+                    <div class="w-9 h-5 bg-gray-600 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-500"></div>
+                </label>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        window.onload = function() {
+            // --- Three.js Setup ---
+            const container = document.getElementById('canvas-container');
+            const scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x111827);
+
+            // Z is the Up axis
+            THREE.Object3D.DefaultUp.set(0, 0, 1);
+
+            const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(12, 15, 12);
+
+            const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(window.devicePixelRatio);
+            container.appendChild(renderer.domElement);
+
+            const controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.05;
+            controls.target.set(0, 0, 2);
+
+            // --- Lighting ---
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+            scene.add(ambientLight);
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            directionalLight.position.set(10, 20, 15);
+            scene.add(directionalLight);
+
+            // --- Grid & Axes ---
+            const gridHelper = new THREE.GridHelper(20, 20, 0x374151, 0x1f2937);
+            gridHelper.rotation.x = Math.PI / 2; // Rotate to XY plane
+            scene.add(gridHelper);
+
+            const axesHelper = new THREE.AxesHelper(10);
+            scene.add(axesHelper);
+
+            // --- Visual Elements ---
+            // 1. The Main Point (P)
+            const pointGeo = new THREE.SphereGeometry(0.25, 32, 32);
+            const pointMat = new THREE.MeshPhongMaterial({ color: 0xfde047, emissive: 0x854d0e }); // Yellow
+            const pointMesh = new THREE.Mesh(pointGeo, pointMat);
+            scene.add(pointMesh);
+
+            // 2. Projection Point on XY Plane
+            const projPointGeo = new THREE.SphereGeometry(0.15, 16, 16);
+            const projPointMat = new THREE.MeshBasicMaterial({ color: 0x9ca3af }); // Gray
+            const projPointMesh = new THREE.Mesh(projPointGeo, projPointMat);
+            scene.add(projPointMesh);
+
+            // 3. Radius Line (Origin to P) - Solid Cyan
+            const radiusLineMat = new THREE.LineBasicMaterial({ color: 0x06b6d4, linewidth: 3 });
+            const radiusLineGeo = new THREE.BufferGeometry();
+            const radiusLine = new THREE.Line(radiusLineGeo, radiusLineMat);
+            scene.add(radiusLine);
+
+            // 4. Projection Lines (Dashed)
+            const projLineMat = new THREE.LineDashedMaterial({ color: 0x9ca3af, dashSize: 0.4, gapSize: 0.2 });
+            
+            // From origin to XY projection
+            const projXYGeo = new THREE.BufferGeometry();
+            const projXYLine = new THREE.Line(projXYGeo, projLineMat);
+            scene.add(projXYLine);
+            
+            // From XY projection up to P
+            const projZGeo = new THREE.BufferGeometry();
+            const projZLine = new THREE.Line(projZGeo, projLineMat);
+            scene.add(projZLine);
+
+            // 5. Angle Arc (Phi - in XY Plane) - Solid Green
+            const arcPhiMat = new THREE.LineBasicMaterial({ color: 0x22c55e, linewidth: 3 });
+            const arcPhiGeo = new THREE.BufferGeometry();
+            const arcPhiLine = new THREE.Line(arcPhiGeo, arcPhiMat);
+            scene.add(arcPhiLine);
+
+            // 6. Angle Arc (Theta - Vertical Plane) - Solid Amber
+            const arcThetaMat = new THREE.LineBasicMaterial({ color: 0xf59e0b, linewidth: 3 });
+            const arcThetaGeo = new THREE.BufferGeometry();
+            const arcThetaLine = new THREE.Line(arcThetaGeo, arcThetaMat);
+            scene.add(arcThetaLine);
+
+            // 7. Reference Lines for Angles
+            const refLineMat = new THREE.LineDashedMaterial({ color: 0x4ade80, dashSize: 0.5, gapSize: 0.2 });
+            const refLineGeo = new THREE.BufferGeometry();
+            const refLine = new THREE.Line(refLineGeo, refLineMat); // X-axis ref for Phi
+            scene.add(refLine);
+
+            const zRefLineMat = new THREE.LineDashedMaterial({ color: 0xfcd34d, dashSize: 0.5, gapSize: 0.2 });
+            const zRefLineGeo = new THREE.BufferGeometry();
+            const zRefLine = new THREE.Line(zRefLineGeo, zRefLineMat); // Z-axis ref for Theta
+            scene.add(zRefLine);
+
+            // 8. Transparent Sphere Surface Helper
+            const sphereGeom = new THREE.SphereGeometry(1, 32, 24);
+            const sphereMat = new THREE.MeshBasicMaterial({ 
+                color: 0x3b82f6, 
+                transparent: true, 
+                opacity: 0.1, 
+                side: THREE.DoubleSide,
+                depthWrite: false,
+                wireframe: true // Looks better mathematically than a solid blob
+            });
+            const sphereHelper = new THREE.Mesh(sphereGeom, sphereMat);
+            scene.add(sphereHelper);
+
+            // 9. Unit Vectors (e_r, e_theta, e_phi)
+            const arrowLength = 2.0;
+            const arrowHeadLength = 0.4;
+            const arrowHeadWidth = 0.25;
+            
+            // Radial unit vector (Cyan)
+            const arrowR = new THREE.ArrowHelper(new THREE.Vector3(1,0,0), new THREE.Vector3(0,0,0), arrowLength, 0x06b6d4, arrowHeadLength, arrowHeadWidth);
+            // Theta unit vector (Amber)
+            const arrowTheta = new THREE.ArrowHelper(new THREE.Vector3(0,0,-1), new THREE.Vector3(0,0,0), arrowLength, 0xf59e0b, arrowHeadLength, arrowHeadWidth);
+            // Phi unit vector (Green)
+            const arrowPhi = new THREE.ArrowHelper(new THREE.Vector3(0,1,0), new THREE.Vector3(0,0,0), arrowLength, 0x22c55e, arrowHeadLength, arrowHeadWidth);
+            
+            arrowR.line.material.linewidth = 2;
+            arrowTheta.line.material.linewidth = 2;
+            arrowPhi.line.material.linewidth = 2;
+
+            scene.add(arrowR);
+            scene.add(arrowTheta);
+            scene.add(arrowPhi);
+
+            // --- State Variables ---
+            let params = {
+                r: 6,
+                theta: 45, // polar angle in degrees
+                phi: 60    // azimuthal angle in degrees
+            };
+
+            // --- DOM Elements ---
+            const rSlider = document.getElementById('r-slider');
+            const thetaSlider = document.getElementById('theta-slider');
+            const phiSlider = document.getElementById('phi-slider');
+            const rVal = document.getElementById('r-val');
+            const thetaVal = document.getElementById('theta-val');
+            const phiVal = document.getElementById('phi-val');
+            const sphereToggle = document.getElementById('sphere-toggle');
+            const vectorsToggle = document.getElementById('vectors-toggle');
+
+            // HTML Labels
+            const labelP = document.getElementById('label-p');
+            const labelR = document.getElementById('label-r');
+            const labelTheta = document.getElementById('label-theta');
+            const labelPhi = document.getElementById('label-phi');
+            const labelXAxis = document.getElementById('label-x-axis');
+            const labelYAxis = document.getElementById('label-y-axis');
+            const labelZAxis = document.getElementById('label-z-axis');
+            const labelUr = document.getElementById('label-ur');
+            const labelUtheta = document.getElementById('label-utheta');
+            const labelUphi = document.getElementById('label-uphi');
+
+            // --- Update Logic ---
+            function updateGeometry() {
+                const r = params.r;
+                const thetaRad = THREE.MathUtils.degToRad(params.theta);
+                const phiRad = THREE.MathUtils.degToRad(params.phi);
+
+                // Math mapping Spherical to Cartesian (Physics convention)
+                const x = r * Math.sin(thetaRad) * Math.cos(phiRad);
+                const y = r * Math.sin(thetaRad) * Math.sin(phiRad);
+                const z = r * Math.cos(thetaRad);
+
+                const currentP = new THREE.Vector3(x, y, z);
+                const xyP = new THREE.Vector3(x, y, 0);
+                const origin = new THREE.Vector3(0, 0, 0);
+
+                // Update Points
+                pointMesh.position.copy(currentP);
+                projPointMesh.position.copy(xyP);
+
+                // Update Lines
+                radiusLineGeo.setFromPoints([origin, currentP]);
+                
+                projXYGeo.setFromPoints([origin, xyP]);
+                projXYLine.computeLineDistances(); // required for dashed lines
+                
+                projZGeo.setFromPoints([xyP, currentP]);
+                projZLine.computeLineDistances();
+
+                // Update Phi Arc (in XY Plane)
+                const arcPhiPoints = [];
+                const arcPhiRadius = Math.min(r * Math.sin(thetaRad) * 0.5, 3); // visual size
+                const segmentsPhi = 32;
+                for (let i = 0; i <= segmentsPhi; i++) {
+                    const a = (i / segmentsPhi) * phiRad;
+                    arcPhiPoints.push(new THREE.Vector3(arcPhiRadius * Math.cos(a), arcPhiRadius * Math.sin(a), 0));
+                }
+                arcPhiGeo.setFromPoints(arcPhiPoints);
+
+                // Update Theta Arc (in Vertical Plane from Z-axis to P)
+                const arcThetaPoints = [];
+                const arcThetaRadius = Math.min(r * 0.5, 3);
+                const segmentsTheta = 32;
+                for (let i = 0; i <= segmentsTheta; i++) {
+                    const a = (i / segmentsTheta) * thetaRad;
+                    // Parametric equation for arc in the specific vertical plane
+                    arcThetaPoints.push(new THREE.Vector3(
+                        arcThetaRadius * Math.sin(a) * Math.cos(phiRad),
+                        arcThetaRadius * Math.sin(a) * Math.sin(phiRad),
+                        arcThetaRadius * Math.cos(a)
+                    ));
+                }
+                arcThetaGeo.setFromPoints(arcThetaPoints);
+                
+                // Update Reference Lines
+                refLineGeo.setFromPoints([origin, new THREE.Vector3(Math.max(r, arcPhiRadius+1), 0, 0)]);
+                refLine.computeLineDistances();
+                
+                zRefLineGeo.setFromPoints([origin, new THREE.Vector3(0, 0, Math.max(r, arcThetaRadius+1))]);
+                zRefLine.computeLineDistances();
+
+                // Update Sphere Helper
+                if(sphereToggle.checked) {
+                    sphereHelper.visible = true;
+                    sphereHelper.scale.set(r, r, r);
+                } else {
+                    sphereHelper.visible = false;
+                }
+
+                // Update Unit Vectors
+                if (vectorsToggle.checked) {
+                    arrowR.visible = true;
+                    arrowTheta.visible = true;
+                    arrowPhi.visible = true;
+
+                    // e_r: Radially outwards
+                    const dirR = new THREE.Vector3(
+                        Math.sin(thetaRad) * Math.cos(phiRad),
+                        Math.sin(thetaRad) * Math.sin(phiRad),
+                        Math.cos(thetaRad)
+                    ).normalize();
+                    
+                    // e_theta: Tangent to meridian (points "down" along the sphere)
+                    const dirTheta = new THREE.Vector3(
+                        Math.cos(thetaRad) * Math.cos(phiRad),
+                        Math.cos(thetaRad) * Math.sin(phiRad),
+                        -Math.sin(thetaRad)
+                    ).normalize();
+
+                    // e_phi: Tangent to parallel (horizontal circle)
+                    const dirPhi = new THREE.Vector3(
+                        -Math.sin(phiRad),
+                        Math.cos(phiRad),
+                        0
+                    ).normalize();
+
+                    // All vectors originate from point P
+                    arrowR.position.copy(currentP);
+                    arrowR.setDirection(dirR);
+
+                    arrowTheta.position.copy(currentP);
+                    arrowTheta.setDirection(dirTheta);
+
+                    arrowPhi.position.copy(currentP);
+                    arrowPhi.setDirection(dirPhi);
+                } else {
+                    arrowR.visible = false;
+                    arrowTheta.visible = false;
+                    arrowPhi.visible = false;
+                }
+            }
+
+            // Function to map 3D coordinate to 2D screen position for labels
+            function updateLabels() {
+                const tempV = new THREE.Vector3();
+
+                const projectAndSetLabel = (position, element, offset = {x:0, y:0}) => {
+                    tempV.copy(position);
+                    tempV.project(camera);
+                    
+                    // Check if object is behind camera
+                    if (tempV.z > 1) {
+                        element.style.opacity = 0;
+                        return;
+                    }
+
+                    const x = (tempV.x * .5 + .5) * window.innerWidth;
+                    const y = (tempV.y * -.5 + .5) * window.innerHeight;
+
+                    element.style.transform = `translate(-50%, -50%) translate(${x + offset.x}px, ${y + offset.y}px)`;
+                    element.style.opacity = 1;
+                };
+
+                // Main Point and Coordinates
+                projectAndSetLabel(pointMesh.position, labelP, {x: 20, y: -25});
+                
+                // Radius midpoint
+                const midR = pointMesh.position.clone().multiplyScalar(0.5);
+                projectAndSetLabel(midR, labelR, {x: 10, y: -15});
+                
+                // Theta Arc midpoint
+                const thetaRad = THREE.MathUtils.degToRad(params.theta);
+                const phiRad = THREE.MathUtils.degToRad(params.phi);
+                const arcThetaRad = Math.min(params.r * 0.5, 3) + 0.4;
+                const midTheta = thetaRad / 2;
+                projectAndSetLabel(new THREE.Vector3(
+                    arcThetaRad * Math.sin(midTheta) * Math.cos(phiRad),
+                    arcThetaRad * Math.sin(midTheta) * Math.sin(phiRad),
+                    arcThetaRad * Math.cos(midTheta)
+                ), labelTheta);
+
+                // Phi Arc midpoint
+                const arcPhiRad = Math.min(params.r * Math.sin(thetaRad) * 0.5, 3) + 0.4; 
+                const midPhi = phiRad / 2;
+                projectAndSetLabel(new THREE.Vector3(
+                    arcPhiRad * Math.cos(midPhi), 
+                    arcPhiRad * Math.sin(midPhi), 
+                    0
+                ), labelPhi);
+
+                // Axes labels
+                projectAndSetLabel(new THREE.Vector3(10.5, 0, 0), labelXAxis);
+                projectAndSetLabel(new THREE.Vector3(0, 10.5, 0), labelYAxis);
+                projectAndSetLabel(new THREE.Vector3(0, 0, 10.5), labelZAxis);
+
+                // Unit Vector Labels
+                if (vectorsToggle.checked) {
+                    const tipOffset = arrowLength + 0.3;
+                    const p = pointMesh.position;
+                    
+                    const dirR = new THREE.Vector3(Math.sin(thetaRad)*Math.cos(phiRad), Math.sin(thetaRad)*Math.sin(phiRad), Math.cos(thetaRad)).normalize();
+                    const dirTheta = new THREE.Vector3(Math.cos(thetaRad)*Math.cos(phiRad), Math.cos(thetaRad)*Math.sin(phiRad), -Math.sin(thetaRad)).normalize();
+                    const dirPhi = new THREE.Vector3(-Math.sin(phiRad), Math.cos(phiRad), 0).normalize();
+
+                    const tipR = new THREE.Vector3(p.x + dirR.x * tipOffset, p.y + dirR.y * tipOffset, p.z + dirR.z * tipOffset);
+                    const tipTheta = new THREE.Vector3(p.x + dirTheta.x * tipOffset, p.y + dirTheta.y * tipOffset, p.z + dirTheta.z * tipOffset);
+                    const tipPhi = new THREE.Vector3(p.x + dirPhi.x * tipOffset, p.y + dirPhi.y * tipOffset, p.z + dirPhi.z * tipOffset);
+
+                    projectAndSetLabel(tipR, labelUr);
+                    projectAndSetLabel(tipTheta, labelUtheta);
+                    projectAndSetLabel(tipPhi, labelUphi);
+                } else {
+                    labelUr.style.opacity = 0;
+                    labelUtheta.style.opacity = 0;
+                    labelUphi.style.opacity = 0;
+                }
+            }
+
+            // --- Event Listeners ---
+            function onSliderChange() {
+                params.r = parseFloat(rSlider.value);
+                params.theta = parseFloat(thetaSlider.value);
+                params.phi = parseFloat(phiSlider.value);
+
+                rVal.innerText = params.r.toFixed(2);
+                thetaVal.innerText = params.theta + '°';
+                phiVal.innerText = params.phi + '°';
+
+                updateGeometry();
+            }
+
+            rSlider.addEventListener('input', onSliderChange);
+            thetaSlider.addEventListener('input', onSliderChange);
+            phiSlider.addEventListener('input', onSliderChange);
+            sphereToggle.addEventListener('change', updateGeometry);
+            vectorsToggle.addEventListener('change', updateGeometry);
+
+            window.addEventListener('resize', () => {
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+            });
+
+            // --- Animation Loop ---
+            function animate() {
+                requestAnimationFrame(animate);
+                controls.update();
+                updateLabels();
+                renderer.render(scene, camera);
+            }
+
+            // Initialization
+            updateGeometry();
+            animate();
+        };
+    </script>
+</body>
+</html>
