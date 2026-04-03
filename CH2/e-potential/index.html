@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Electric Field & Potential Simulation</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #030712; /* tailwind gray-950 */
+            color: white;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            user-select: none;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+        #canvasContainer {
+            flex-grow: 1;
+            position: relative;
+            width: 100%;
+        }
+        #canvas {
+            display: block;
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            cursor: crosshair;
+        }
+        /* Custom range slider styling */
+        input[type=range] {
+            accent-color: #3b82f6;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- UI Control Panel (Top Bar) -->
+    <div class="w-full bg-gray-900 border-b border-gray-800 p-3 flex flex-wrap items-center justify-between gap-4 z-10 shrink-0 shadow-md">
+        <!-- Left: Title & Instructions -->
+        <div>
+            <h1 class="text-xl font-bold text-gray-100 tracking-tight">Electrodynamics</h1>
+            <p class="text-xs text-gray-400 mt-0.5">Left-click: Add | Right-click: Remove</p>
+        </div>
+
+        <!-- Middle: Charge Settings -->
+        <div class="flex items-center gap-6 bg-gray-800/50 px-4 py-2 rounded-lg border border-gray-700/50">
+            <div class="flex items-center gap-2">
+                <span class="text-sm font-semibold text-gray-300 uppercase tracking-wider mr-1">Polarity:</span>
+                <button id="btnPos" class="w-10 py-1 rounded bg-red-600 hover:bg-red-500 font-bold text-white transition-colors border-2 border-red-400">+</button>
+                <button id="btnNeg" class="w-10 py-1 rounded bg-gray-800 hover:bg-gray-700 font-bold text-gray-300 transition-colors border-2 border-transparent">-</button>
+            </div>
+
+            <div class="w-px h-6 bg-gray-600"></div>
+
+            <div class="flex items-center gap-3">
+                <label class="text-sm font-semibold text-gray-300 uppercase tracking-wider whitespace-nowrap">Magnitude:</label>
+                <input type="range" id="chargeMag" min="1" max="10" value="1" class="w-24">
+                <span id="magDisplay" class="text-sm font-mono bg-gray-900 px-2 py-1 rounded w-8 text-center border border-gray-700">1</span>
+            </div>
+        </div>
+
+        <!-- Right: Clear -->
+        <button id="btnClear" class="px-5 py-2 rounded-lg bg-gray-800 hover:bg-red-900/50 hover:text-red-400 text-gray-300 font-medium transition-colors border border-gray-700 hover:border-red-800/50">
+            Clear All
+        </button>
+    </div>
+
+    <!-- Main Rendering Canvas -->
+    <div id="canvasContainer">
+        <canvas id="canvas"></canvas>
+    </div>
+
+    <script>
+        const canvasContainer = document.getElementById('canvasContainer');
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+
+        // State
+        let charges = [];
+        let currentPolarity = 1; // 1 for pos, -1 for neg
+        
+        // Performance configuration for potential rendering
+        const P_SCALE = 3; // Compute potential at 1/3 resolution for high framerate
+        let offCanvas = null;
+        let offCtx = null;
+        let imgData = null;
+
+        // UI Elements
+        const btnPos = document.getElementById('btnPos');
+        const btnNeg = document.getElementById('btnNeg');
+        const chargeMag = document.getElementById('chargeMag');
+        const magDisplay = document.getElementById('magDisplay');
+        const btnClear = document.getElementById('btnClear');
+
+        // Initialize Canvas Size
+        function resize() {
+            // Ensure minimum dimensions to prevent ImageData zero-size errors
+            canvas.width = Math.max(1, canvasContainer.clientWidth);
+            canvas.height = Math.max(1, canvasContainer.clientHeight);
+            offCanvas = null; // Force recreation of offscreen buffer
+            draw();
+        }
+        window.addEventListener('resize', resize);
+
+        // UI Event Listeners
+        btnPos.addEventListener('click', () => {
+            currentPolarity = 1;
+            btnPos.classList.add('border-red-400', 'bg-red-600', 'text-white');
+            btnPos.classList.remove('bg-gray-800', 'border-transparent', 'text-gray-300');
+            btnNeg.classList.remove('border-blue-400', 'bg-blue-600', 'text-white');
+            btnNeg.classList.add('bg-gray-800', 'border-transparent', 'text-gray-300');
+        });
+
+        btnNeg.addEventListener('click', () => {
+            currentPolarity = -1;
+            btnNeg.classList.add('border-blue-400', 'bg-blue-600', 'text-white');
+            btnNeg.classList.remove('bg-gray-800', 'border-transparent', 'text-gray-300');
+            btnPos.classList.remove('border-red-400', 'bg-red-600', 'text-white');
+            btnPos.classList.add('bg-gray-800', 'border-transparent', 'text-gray-300');
+        });
+
+        chargeMag.addEventListener('input', (e) => {
+            magDisplay.textContent = e.target.value;
+        });
+
+        btnClear.addEventListener('click', () => {
+            charges = [];
+            draw();
+        });
+
+        // Canvas Interaction
+        canvas.addEventListener('mousedown', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+
+            // Right click (or shift click) to remove
+            if (e.button === 2 || e.shiftKey) {
+                let closestIdx = -1;
+                let minDist = 25; // Click radius
+                for (let i = 0; i < charges.length; i++) {
+                    const c = charges[i];
+                    const dist = Math.sqrt((x - c.x) ** 2 + (y - c.y) ** 2);
+                    if (dist < minDist) {
+                        minDist = dist;
+                        closestIdx = i;
+                    }
+                }
+                if (closestIdx !== -1) {
+                    charges.splice(closestIdx, 1);
+                    draw();
+                }
+            } else if (e.button === 0) {
+                // Left click to add
+                charges.push({
+                    x: x,
+                    y: y,
+                    q: currentPolarity * parseInt(chargeMag.value)
+                });
+                draw();
+            }
+        });
+
+        // Prevent context menu on right click
+        canvas.addEventListener('contextmenu', e => e.preventDefault());
+
+        // Main Rendering Pipeline
+        function draw() {
+            // Guard clause if canvas dimensions are zero
+            if (canvas.width === 0 || canvas.height === 0) return;
+
+            // Clear background
+            ctx.fillStyle = '#030712'; // gray-950
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            if (charges.length > 0) {
+                drawPotential();
+                drawField();
+            }
+            drawCharges();
+        }
+
+        // 1. Calculate & Draw Electric Potential (Scalar Field)
+        function drawPotential() {
+            // Ensure minimum dimensions of 1x1 to prevent IndexSizeError in createImageData
+            const w = Math.max(1, Math.ceil(canvas.width / P_SCALE));
+            const h = Math.max(1, Math.ceil(canvas.height / P_SCALE));
+
+            if (!offCanvas || offCanvas.width !== w || offCanvas.height !== h) {
+                offCanvas = document.createElement('canvas');
+                offCanvas.width = w;
+                offCanvas.height = h;
+                offCtx = offCanvas.getContext('2d');
+                imgData = offCtx.createImageData(w, h);
+            }
+
+            const data = imgData.data;
+            let index = 0;
+
+            const isStepped = true; // Always stepped
+            // Base visual scaling constant
+            const baseK = 15; 
+            const sensitivity = 2.5 * baseK; // Hardcoded intensity
+
+            for (let y = 0; y < h; y++) {
+                for (let x = 0; x < w; x++) {
+                    // Map back to screen coordinates
+                    const rx = x * P_SCALE;
+                    const ry = y * P_SCALE;
+                    let v = 0;
+
+                    // Superposition principle for potential V = sum(kq/r)
+                    for (let i = 0; i < charges.length; i++) {
+                        const c = charges[i];
+                        const dx = rx - c.x;
+                        const dy = ry - c.y;
+                        // Minimum distance to prevent division by zero / infinite potential
+                        const r = Math.max(Math.sqrt(dx * dx + dy * dy), 3); 
+                        v += c.q / r;
+                    }
+
+                    let vScaled = v * sensitivity;
+
+                    // Equipotential bands logic
+                    if (isStepped) {
+                        const stepCount = 8;
+                        vScaled = Math.sign(vScaled) * Math.floor(Math.abs(vScaled) * stepCount) / stepCount;
+                    }
+
+                    // Tanh to smoothly map (-inf, inf) into (-1, 1) range
+                    const t = Math.tanh(vScaled);
+
+                    // Map to colors: Red for Positive, Blue for Negative
+                    let rCol = 3, gCol = 7, bCol = 18; // Base dark background
+                    if (t > 0) {
+                        rCol = Math.min(255, 3 + 252 * t);
+                        gCol = Math.min(255, 7 + 80 * t);
+                        bCol = Math.min(255, 18 + 50 * t);
+                    } else if (t < 0) {
+                        const absT = -t;
+                        rCol = Math.min(255, 3 + 50 * absT);
+                        gCol = Math.min(255, 7 + 120 * absT);
+                        bCol = Math.min(255, 18 + 237 * absT);
+                    }
+
+                    data[index++] = rCol;
+                    data[index++] = gCol;
+                    data[index++] = bCol;
+                    data[index++] = 255; // Alpha
+                }
+            }
+
+            offCtx.putImageData(imgData, 0, 0);
+            
+            // Draw scaled up to main canvas (browser applies bilinear filtering automatically)
+            ctx.globalAlpha = 1.0;
+            ctx.drawImage(offCanvas, 0, 0, canvas.width, canvas.height);
+        }
+
+        // 2. Calculate & Draw Electric Field (Vector Field)
+        function drawField() {
+            const spacing = 15;
+            const sensitivity = 5;
+            const baseK = 5000; // Visualization scaling constant
+
+            ctx.lineWidth = 1.2;
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+
+            // Iterate over a grid
+            for (let y = spacing / 2; y < canvas.height; y += spacing) {
+                for (let x = spacing / 2; x < canvas.width; x += spacing) {
+                    let ex = 0;
+                    let ey = 0;
+
+                    // Superposition principle for electric field E = sum(kq/r^2 * r_hat)
+                    for (let i = 0; i < charges.length; i++) {
+                        const c = charges[i];
+                        const dx = x - c.x;
+                        const dy = y - c.y;
+                        const rSq = dx * dx + dy * dy;
+                        const r = Math.sqrt(rSq);
+                        
+                        // Prevent infinite field at charge center
+                        const r3 = Math.max(rSq * r, 50); 
+                        
+                        ex += (c.q * dx) / r3;
+                        ey += (c.q * dy) / r3;
+                    }
+
+                    const mag = Math.sqrt(ex * ex + ey * ey);
+                    if (mag === 0) continue;
+
+                    // Compute visual length and opacity based on field magnitude
+                    const displayMag = mag * baseK * sensitivity;
+                    const maxLen = spacing * 0.8;
+                    const arrowLen = Math.min(maxLen, displayMag);
+                    
+                    // Fade out arrows where the field is extremely weak
+                    const opacity = Math.min(1.0, displayMag / (maxLen * 0.3));
+                    if (opacity < 0.05) continue;
+
+                    ctx.globalAlpha = opacity;
+                    
+                    const dirX = ex / mag;
+                    const dirY = ey / mag;
+
+                    const startX = x - (dirX * arrowLen) / 2;
+                    const startY = y - (dirY * arrowLen) / 2;
+                    const endX = x + (dirX * arrowLen) / 2;
+                    const endY = y + (dirY * arrowLen) / 2;
+
+                    // Draw Shaft
+                    ctx.beginPath();
+                    ctx.moveTo(startX, startY);
+                    ctx.lineTo(endX, endY);
+                    ctx.stroke();
+
+                    // Draw Arrow Head
+                    const headLen = Math.min(6, arrowLen * 0.35);
+                    const angle = Math.atan2(dirY, dirX);
+                    ctx.beginPath();
+                    ctx.moveTo(endX, endY);
+                    ctx.lineTo(endX - headLen * Math.cos(angle - Math.PI / 6), endY - headLen * Math.sin(angle - Math.PI / 6));
+                    ctx.lineTo(endX - headLen * Math.cos(angle + Math.PI / 6), endY - headLen * Math.sin(angle + Math.PI / 6));
+                    ctx.fill();
+                }
+            }
+            ctx.globalAlpha = 1.0;
+        }
+
+        // 3. Draw the actual Point Charges
+        function drawCharges() {
+            for (let c of charges) {
+                const radius = 10 + Math.sqrt(Math.abs(c.q)) * 2;
+                
+                // Add soft glow
+                const gradient = ctx.createRadialGradient(c.x, c.y, radius * 0.5, c.x, c.y, radius * 1.5);
+                if (c.q > 0) {
+                    gradient.addColorStop(0, 'rgba(239, 68, 68, 1)');   // solid red
+                    gradient.addColorStop(1, 'rgba(239, 68, 68, 0)');   // fade red
+                    ctx.fillStyle = '#ef4444'; 
+                } else {
+                    gradient.addColorStop(0, 'rgba(59, 130, 246, 1)');  // solid blue
+                    gradient.addColorStop(1, 'rgba(59, 130, 246, 0)');  // fade blue
+                    ctx.fillStyle = '#3b82f6';
+                }
+
+                ctx.beginPath();
+                ctx.arc(c.x, c.y, radius * 1.5, 0, Math.PI * 2);
+                ctx.fillStyle = gradient;
+                ctx.fill();
+
+                // Core charge circle
+                ctx.beginPath();
+                ctx.arc(c.x, c.y, radius, 0, Math.PI * 2);
+                ctx.fillStyle = c.q > 0 ? '#ef4444' : '#3b82f6';
+                ctx.fill();
+                
+                ctx.lineWidth = 2;
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
+                ctx.stroke();
+
+                // Draw + or - label
+                ctx.fillStyle = '#ffffff';
+                ctx.font = `bold ${radius}px monospace`;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                // Adjusting Y slightly so plus/minus vertically centers perfectly in most fonts
+                ctx.fillText(c.q > 0 ? '+' : '-', c.x, c.y + (radius * 0.1)); 
+            }
+        }
+
+        // Initialization
+        resize();
+
+        // Setup an initial dipole to make it look cool out of the box
+        setTimeout(() => {
+            const w = canvas.width;
+            const h = canvas.height;
+            
+            // Recreated charge distribution from the image
+            charges.push({ x: w * 0.35, y: h * 0.35, q: 5 });   // Dominant positive charge
+            charges.push({ x: w * 0.10, y: h * 0.15, q: -2 });  // Top-left negative charge
+            charges.push({ x: w * 0.15, y: h * 0.55, q: -2 });  // Bottom-left negative charge
+            
+            draw();
+        }, 100);
+
+    </script>
+</body>
+</html>
