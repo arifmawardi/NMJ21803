@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Conductors in an Electric Field Simulation</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #0f172a; color: #f8fafc; font-family: 'Inter', sans-serif; }
+        canvas { display: block; border-radius: 0.5rem; box-shadow: 0 10px 30px -10px rgba(0,0,0,0.8); cursor: grab; }
+        canvas:active { cursor: grabbing; }
+        
+        .glass-panel {
+            background: rgba(30, 41, 59, 0.85);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        /* Custom Scrollbar for the sidebar */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: rgba(0,0,0,0.1); }
+        ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.3); }
+    </style>
+</head>
+<body class="h-screen w-screen flex flex-col p-6 gap-6">
+
+    <!-- Top Header Card -->
+    <div class="glass-panel w-full p-8 rounded-2xl shadow-2xl shrink-0">
+        <h1 class="text-4xl font-extrabold bg-clip-text text-transparent bg-gradient-to-r from-sky-400 to-indigo-400 mb-3">Conductors in Electric Fields</h1>
+        <p class="text-lg text-slate-300 leading-relaxed max-w-4xl mb-6">
+            Observe how perfectly conducting shapes distort a uniform electric field. 
+            <strong>Drag the shape</strong> to interact!
+        </p>
+
+        <!-- Shape Selection -->
+        <div class="flex flex-col gap-3 pt-4 border-t border-white/10">
+            <label class="text-xs font-semibold text-slate-400 uppercase tracking-widest">Select Conductor Shape</label>
+            <div class="flex flex-wrap gap-3">
+                <button onclick="setShape('sphere')" id="btn-sphere" class="shape-btn bg-slate-700 hover:bg-slate-600 text-white px-6 py-2 rounded-full text-sm font-medium transition-all border border-transparent">Sphere</button>
+                <button onclick="setShape('plate')" id="btn-plate" class="shape-btn bg-slate-700 hover:bg-slate-600 text-white px-6 py-2 rounded-full text-sm font-medium transition-all border border-transparent">Plate</button>
+                <button onclick="setShape('sharp')" id="btn-sharp" class="shape-btn bg-slate-700 hover:bg-slate-600 text-white px-6 py-2 rounded-full text-sm font-medium transition-all border border-transparent">Teardrop</button>
+                <button onclick="setShape('hollow')" id="btn-hollow" class="shape-btn bg-slate-700 hover:bg-slate-600 text-white px-6 py-2 rounded-full text-sm font-medium transition-all border border-transparent">Hollow Shell</button>
+                <button onclick="setShape('none')" id="btn-none" class="shape-btn bg-sky-600 hover:bg-sky-500 text-white px-6 py-2 rounded-full text-sm font-medium transition-all border border-sky-400 shadow-lg shadow-sky-500/20">None (Uniform Field)</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content Area -->
+    <div class="flex flex-1 gap-6 min-h-0">
+        <!-- Left side: Simulation Canvas -->
+        <div class="relative flex-1 h-full flex items-center justify-center bg-slate-900/50 rounded-xl border border-white/5 overflow-hidden">
+            <canvas id="simCanvas"></canvas>
+        </div>
+
+        <!-- Right side: Sidebar (Physics Highlights only) - Widened to 400px -->
+        <div class="glass-panel w-[400px] h-full rounded-xl p-6 flex flex-col gap-6 overflow-y-auto shrink-0">
+            <div class="bg-slate-800/50 p-6 rounded-lg border border-slate-700/50">
+                <h3 class="text-3xl font-bold text-indigo-300 mb-6 uppercase tracking-wider">Physics Highlights</h3>
+                <ul class="text-xl text-slate-400 space-y-8">
+                    <li class="flex gap-4">
+                        <span class="text-indigo-400 font-bold text-2xl">•</span>
+                        <span><strong>At the surface:</strong> The electric field is always <strong>normal</strong> (perpendicular) to the surface of a conductor.</span>
+                    </li>
+                    <li class="flex gap-4">
+                        <span class="text-indigo-400 font-bold text-2xl">•</span>
+                        <span><strong>Inside the conductor</strong>: In electrostatic equilibrium, the electric field is <strong>zero</strong> everywhere inside.</span>
+                    </li>
+                    <li class="flex gap-4">
+                        <span class="text-indigo-400 font-bold text-2xl">•</span>
+                        <span><strong>Internal charge:</strong> The net electric charge inside a solid conductor is <strong>zero</strong>.</span>
+                    </li>
+                    <li class="flex gap-4">
+                        <span class="text-indigo-400 font-bold text-2xl">•</span>
+                        <span><strong>Charge distribution:</strong> Any excess charge resides <strong>entirely on the outer surface</strong> of the conductor.</span>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('simCanvas');
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
+        
+        const Nx = 160;
+        const Ny = 100;
+        const SCALE = 6; 
+        
+        canvas.width = Nx * SCALE;
+        canvas.height = Ny * SCALE;
+
+        let V = new Float32Array(Nx * Ny);
+        let C = new Uint8Array(Nx * Ny);
+        
+        let conductorPotential = 0;
+        const isIsolated = true;
+
+        let currentShape = 'none';
+        let shapeCx = Nx / 2;
+        let shapeCy = Ny / 2;
+
+        let isDragging = false;
+        let dragOffsetX = 0;
+        let dragOffsetY = 0;
+
+        const imgData = ctx.createImageData(Nx, Ny);
+        const offscreenCanvas = document.createElement('canvas');
+        offscreenCanvas.width = Nx;
+        offscreenCanvas.height = Ny;
+        const offCtx = offscreenCanvas.getContext('2d');
+
+        function init() {
+            resetPotential();
+            buildShape();
+            heavyRelax(); 
+            
+            canvas.addEventListener('mousedown', (e) => {
+                const rect = canvas.getBoundingClientRect();
+                const mx = (e.clientX - rect.left) / SCALE;
+                const my = (e.clientY - rect.top) / SCALE;
+                
+                let i = Math.round(my) * Nx + Math.round(mx);
+                if (i >= 0 && i < Nx*Ny && C[i] === 1) {
+                    isDragging = true;
+                    dragOffsetX = mx - shapeCx;
+                    dragOffsetY = my - shapeCy;
+                }
+            });
+
+            window.addEventListener('mousemove', (e) => {
+                if (isDragging) {
+                    const rect = canvas.getBoundingClientRect();
+                    let mx = (e.clientX - rect.left) / SCALE;
+                    let my = (e.clientY - rect.top) / SCALE;
+                    
+                    shapeCx = mx - dragOffsetX;
+                    shapeCy = my - dragOffsetY;
+                    
+                    shapeCx = Math.max(20, Math.min(Nx - 20, shapeCx));
+                    shapeCy = Math.max(20, Math.min(Ny - 20, shapeCy));
+                    
+                    resetPotential();
+                    buildShape();
+                    heavyRelax();
+                    draw();
+                }
+            });
+
+            window.addEventListener('mouseup', () => { isDragging = false; });
+            window.addEventListener('mouseleave', () => { isDragging = false; });
+
+            requestAnimationFrame(loop);
+        }
+
+        function resetPotential() {
+            for (let y = 0; y < Ny; y++) {
+                for (let x = 0; x < Nx; x++) {
+                    V[y * Nx + x] = 100 - x * (200 / (Nx - 1));
+                }
+            }
+        }
+
+        function buildShape() {
+            C.fill(0);
+            
+            if (currentShape === 'none') return;
+
+            for (let y = 0; y < Ny; y++) {
+                for (let x = 0; x < Nx; x++) {
+                    let i = y * Nx + x;
+                    let dx = x - shapeCx;
+                    let dy = y - shapeCy;
+                    
+                    if (currentShape === 'sphere') {
+                        if (dx*dx + dy*dy <= 25*25) C[i] = 1;
+                    } 
+                    else if (currentShape === 'plate') {
+                        if (Math.abs(dx) <= 4 && Math.abs(dy) <= 35) C[i] = 1;
+                    }
+                    else if (currentShape === 'sharp') {
+                        if (dx > -15 && dx < 25 && Math.abs(dy) <= (25 - dx) / 1.5) C[i] = 1;
+                        if (dx <= -15 && (dx+15)*(dx+15) + dy*dy <= 26.6*26.6) C[i] = 1;
+                    }
+                    else if (currentShape === 'hollow') {
+                        let r2 = dx*dx + dy*dy;
+                        if (r2 <= 20*20 && r2 >= 13*13) C[i] = 1;
+                    }
+                }
+            }
+        }
+
+        function setShape(type) {
+            currentShape = type;
+            document.querySelectorAll('.shape-btn').forEach(btn => {
+                btn.classList.remove('bg-sky-600', 'border-sky-400', 'shadow-lg', 'shadow-sky-500/20');
+                btn.classList.add('bg-slate-700', 'border-transparent');
+            });
+            const activeBtn = document.getElementById(`btn-${type}`);
+            activeBtn.classList.remove('bg-slate-700', 'border-transparent');
+            activeBtn.classList.add('bg-sky-600', 'border-sky-400', 'shadow-lg', 'shadow-sky-500/20');
+            
+            shapeCx = Nx / 2;
+            shapeCy = Ny / 2;
+            resetPotential();
+            buildShape();
+            heavyRelax();
+            draw();
+        }
+
+        function relax(iterations) {
+            const omega = 1.6; 
+            
+            for (let iter = 0; iter < iterations; iter++) {
+                let sumV = 0;
+                let boundaryCount = 0;
+
+                for (let y = 1; y < Ny - 1; y++) {
+                    for (let x = 1; x < Nx - 1; x++) {
+                        let i = y * Nx + x;
+                        
+                        if (C[i] === 1) {
+                            V[i] = conductorPotential;
+                        } else {
+                            let v_old = V[i];
+                            let v_new = 0.25 * (V[i-1] + V[i+1] + V[i-Nx] + V[i+Nx]);
+                            V[i] = v_old + omega * (v_new - v_old);
+
+                            if (isIsolated && (C[i-1]===1 || C[i+1]===1 || C[i-Nx]===1 || C[i+Nx]===1)) {
+                                sumV += V[i];
+                                boundaryCount++;
+                            }
+                        }
+                    }
+                }
+
+                if (isIsolated && boundaryCount > 0) {
+                    conductorPotential = sumV / boundaryCount;
+                }
+                
+                for (let y = 0; y < Ny; y++) {
+                    V[y * Nx + 0] = 100;
+                    V[y * Nx + (Nx - 1)] = -100;
+                }
+                for (let x = 0; x < Nx; x++) {
+                    V[0 * Nx + x] = 100 - x * (200 / (Nx - 1));
+                    V[(Ny - 1) * Nx + x] = 100 - x * (200 / (Nx - 1));
+                }
+            }
+        }
+
+        function heavyRelax() { relax(500); }
+
+        function getE(x, y) {
+            let i = Math.floor(x);
+            let j = Math.floor(y);
+            if (i < 1 || i >= Nx - 2 || j < 1 || j >= Ny - 2) return { Ex: 0, Ey: 0 };
+            
+            let getEx = (cx, cy) => -(V[cy * Nx + cx + 1] - V[cy * Nx + cx - 1]) / 2;
+            let getEy = (cx, cy) => -(V[(cy + 1) * Nx + cx] - V[(cy - 1) * Nx + cx]) / 2;
+
+            let u = x - i;
+            let v = y - j;
+
+            let Ex00 = getEx(i, j),   Ex10 = getEx(i+1, j);
+            let Ex01 = getEx(i, j+1), Ex11 = getEx(i+1, j+1);
+            let Ex = Ex00*(1-u)*(1-v) + Ex10*u*(1-v) + Ex01*(1-u)*v + Ex11*u*v;
+
+            let Ey00 = getEy(i, j),   Ey10 = getEy(i+1, j);
+            let Ey01 = getEy(i, j+1), Ey11 = getEy(i+1, j+1);
+            let Ey = Ey00*(1-u)*(1-v) + Ey10*u*(1-v) + Ey01*(1-u)*v + Ey11*u*v;
+
+            return { Ex, Ey };
+        }
+
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            for (let i = 0; i < Nx * Ny; i++) {
+                let isCond = C[i] === 1;
+                let idx = i * 4;
+                let r = 15, g = 23, b = 42; 
+
+                if (isCond) {
+                    r = 148; g = 163; b = 184; 
+                }
+
+                imgData.data[idx] = r;
+                imgData.data[idx + 1] = g;
+                imgData.data[idx + 2] = b;
+                imgData.data[idx + 3] = 255;
+            }
+            
+            offCtx.putImageData(imgData, 0, 0);
+            ctx.imageSmoothingEnabled = true;
+            ctx.drawImage(offscreenCanvas, 0, 0, canvas.width, canvas.height);
+
+            drawConductorGlow();
+            drawVectors();
+        }
+
+        function drawConductorGlow() {
+            ctx.fillStyle = "rgba(255,255,255,0.1)";
+            ctx.strokeStyle = "#ffffff";
+            ctx.lineWidth = 1.5;
+            
+            for (let y = 1; y < Ny - 1; y++) {
+                for (let x = 1; x < Nx - 1; x++) {
+                    let i = y * Nx + x;
+                    if (C[i] === 1) {
+                        if (C[i-1]===0 || C[i+1]===0 || C[i-Nx]===0 || C[i+Nx]===0) {
+                            ctx.beginPath();
+                            ctx.arc(x * SCALE, y * SCALE, SCALE/2, 0, Math.PI * 2);
+                            ctx.fillStyle = "#fff";
+                            ctx.fill();
+                        }
+                    }
+                }
+            }
+        }
+
+        function drawVectors() {
+            ctx.strokeStyle = 'rgba(57, 255, 20, 0.95)';
+            ctx.fillStyle = 'rgba(57, 255, 20, 0.95)';
+            ctx.lineWidth = 1.5;
+
+            for (let y = 5; y < Ny; y += 8) {
+                for (let x = 5; x < Nx; x += 8) {
+                    if (C[y * Nx + x] === 1) continue;
+
+                    let { Ex, Ey } = getE(x, y);
+                    let mag = Math.sqrt(Ex*Ex + Ey*Ey);
+                    
+                    if (mag < 0.1) continue; 
+                    
+                    let px = x * SCALE;
+                    let py = y * SCALE;
+                    let dx = (Ex / mag) * 22;
+                    let dy = (Ey / mag) * 22;
+                    
+                    ctx.beginPath();
+                    ctx.moveTo(px, py);
+                    ctx.lineTo(px + dx, py + dy);
+                    ctx.stroke();
+
+                    let angle = Math.atan2(dy, dx);
+                    ctx.beginPath();
+                    ctx.moveTo(px + dx, py + dy);
+                    ctx.lineTo(px + dx - 8 * Math.cos(angle - 0.5), py + dy - 8 * Math.sin(angle - 0.5));
+                    ctx.lineTo(px + dx - 8 * Math.cos(angle + 0.5), py + dy - 8 * Math.sin(angle + 0.5));
+                    ctx.fill();
+                }
+            }
+        }
+
+        function loop() {
+            if (!isDragging) {
+                relax(5); 
+            }
+            draw();
+            requestAnimationFrame(loop);
+        }
+
+        init();
+    </script>
+</body>
+</html>

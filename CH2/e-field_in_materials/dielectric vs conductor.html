@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Electric Fields in Materials</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+            background-color: #f8fafc;
+            border-radius: 0.5rem;
+        }
+        .canvas-container {
+            position: relative;
+            width: 100%;
+            aspect-ratio: 4/3;
+            box-shadow: inset 0 2px 4px 0 rgb(0 0 0 / 0.05);
+            border: 1px solid #e2e8f0;
+            border-radius: 0.5rem;
+            overflow: hidden;
+        }
+        .field-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            background: linear-gradient(to right, rgba(239, 68, 68, 0.05), rgba(59, 130, 246, 0.05));
+        }
+        .field-overlay.active {
+            opacity: 1;
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen p-4 md:p-8">
+
+    <div class="max-w-6xl mx-auto space-y-8">
+        
+        <!-- Updated Header Section -->
+        <div class="bg-white p-8 rounded-2xl shadow-sm border border-slate-200">
+            <h1 class="text-3xl md:text-4xl font-bold text-slate-900 mb-3">Electric Fields in Materials</h1>
+            <p class="text-slate-600 text-lg leading-relaxed">
+                Observe the fundamental differences in electronic structure. In dielectrics, electrons are bound in localized clouds, while in conductors, they form a "sea" of free electrons.
+            </p>
+        </div>
+        
+        <!-- Simulation Grid -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            
+            <!-- Dielectric Panel -->
+            <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col">
+                <div class="flex items-center gap-3 mb-4">
+                    <div class="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v8"/><path d="M8 12h8"/></svg>
+                    </div>
+                    <div>
+                        <h2 class="text-xl font-bold text-slate-800">Dielectric (Insulator)</h2>
+                        <p class="text-sm text-slate-500">Bound electron clouds</p>
+                    </div>
+                </div>
+                
+                <img src="dielectrics.png" alt="Dielectric Material" class="w-full aspect-[3/1] object-cover rounded-lg mb-4 border border-slate-200 bg-slate-100" onerror="this.onerror=null; this.src='data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'300\' height=\'100\'><rect width=\'300\' height=\'100\' fill=\'%23f1f5f9\'/><text x=\'50%\' y=\'50%\' dominant-baseline=\'middle\' text-anchor=\'middle\' font-family=\'sans-serif\' font-size=\'14\' fill=\'%2394a3b8\'>dielectrics.png</text></svg>'">
+                
+                <div class="canvas-container grow">
+                    <canvas id="dielectricCanvas"></canvas>
+                    <div class="field-overlay field-effect"></div>
+                </div>
+
+                <div class="mt-4 text-sm text-slate-600 bg-slate-50 p-3 rounded-lg border border-slate-100 h-24">
+                    <strong>Behavior:</strong> Electrons form a localized cloud around each positive nucleus.
+                </div>
+            </div>
+
+            <!-- Conductor Panel -->
+            <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col">
+                <div class="flex items-center gap-3 mb-4">
+                    <div class="w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center text-amber-600">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+                    </div>
+                    <div>
+                        <h2 class="text-xl font-bold text-slate-800">Conductor</h2>
+                        <p class="text-sm text-slate-500">Free electron gas</p>
+                    </div>
+                </div>
+
+                <img src="conductors.png" alt="Conductor Material" class="w-full aspect-[3/1] object-cover rounded-lg mb-4 border border-slate-200 bg-slate-100" onerror="this.onerror=null; this.src='data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'300\' height=\'100\'><rect width=\'300\' height=\'100\' fill=\'%23f1f5f9\'/><text x=\'50%\' y=\'50%\' dominant-baseline=\'middle\' text-anchor=\'middle\' font-family=\'sans-serif\' font-size=\'14\' fill=\'%2394a3b8\'>conductors.png</text></svg>'">
+
+                <div class="canvas-container grow">
+                    <canvas id="conductorCanvas"></canvas>
+                    <div class="field-overlay field-effect"></div>
+                </div>
+
+                <div class="mt-4 text-sm text-slate-600 bg-slate-50 p-3 rounded-lg border border-slate-100 h-24">
+                    <strong>Behavior:</strong> Valence electrons detach from their atoms and roam freely.
+                </div>
+            </div>
+
+        </div>
+
+        <!-- Legend -->
+        <div class="flex flex-wrap justify-center gap-6 text-sm text-slate-600">
+            <div class="flex items-center gap-2">
+                <span class="w-4 h-4 rounded-full bg-red-500 inline-block shadow-sm"></span>
+                Positive Ion Core (Stationary)
+            </div>
+            <div class="flex items-center gap-2">
+                <span class="w-4 h-4 rounded-full bg-blue-400 opacity-80 inline-block shadow-sm"></span>
+                Bound Electron Cloud
+            </div>
+            <div class="flex items-center gap-2">
+                <span class="w-2.5 h-2.5 rounded-full bg-blue-500 inline-block shadow-sm"></span>
+                Free Electron
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // State
+        let isFieldOn = false;
+        
+        // Canvas Setup
+        const dCanvas = document.getElementById('dielectricCanvas');
+        const cCanvas = document.getElementById('conductorCanvas');
+        const dCtx = dCanvas.getContext('2d');
+        const cCtx = cCanvas.getContext('2d');
+
+        // Logic variables
+        let width, height;
+        const GRID_SPACING = 60;
+        const ATOM_RADIUS = 8;
+        const CLOUD_RADIUS = 22;
+        const ELECTRON_RADIUS = 3;
+
+        let dielectricAtoms = [];
+        let conductorIons = [];
+        let freeElectrons = [];
+
+        function resize() {
+            const rect1 = dCanvas.parentElement.getBoundingClientRect();
+            const rect2 = cCanvas.parentElement.getBoundingClientRect();
+            
+            dCanvas.width = rect1.width;
+            dCanvas.height = rect1.height;
+            cCanvas.width = rect2.width;
+            cCanvas.height = rect2.height;
+            
+            width = rect1.width;
+            height = rect1.height;
+
+            initSimulation();
+        }
+
+        function initSimulation() {
+            dielectricAtoms = [];
+            conductorIons = [];
+            freeElectrons = [];
+
+            const cols = Math.floor(width / GRID_SPACING);
+            const rows = Math.floor(height / GRID_SPACING);
+            const offsetX = (width - ((cols - 1) * GRID_SPACING)) / 2;
+            const offsetY = (height - ((rows - 1) * GRID_SPACING)) / 2;
+
+            for (let i = 0; i < cols; i++) {
+                for (let j = 0; j < rows; j++) {
+                    const x = offsetX + i * GRID_SPACING;
+                    const y = offsetY + j * GRID_SPACING;
+                    
+                    dielectricAtoms.push({
+                        x: x,
+                        y: y,
+                        cloudShiftX: 0,
+                        cloudShiftY: 0,
+                        phase: Math.random() * Math.PI * 2
+                    });
+
+                    conductorIons.push({ x: x, y: y });
+
+                    const numElectrons = 1 + Math.floor(Math.random() * 2);
+                    for(let e=0; e<numElectrons; e++) {
+                        freeElectrons.push({
+                            x: x + (Math.random() * 20 - 10),
+                            y: y + (Math.random() * 20 - 10),
+                            vx: (Math.random() - 0.5) * 2,
+                            vy: (Math.random() - 0.5) * 2,
+                        });
+                    }
+                }
+            }
+        }
+
+        function drawIonCore(ctx, x, y) {
+            ctx.beginPath();
+            ctx.arc(x, y, ATOM_RADIUS, 0, Math.PI * 2);
+            ctx.fillStyle = '#ef4444';
+            ctx.fill();
+            
+            ctx.strokeStyle = 'white';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(x - 3, y);
+            ctx.lineTo(x + 3, y);
+            ctx.moveTo(x, y - 3);
+            ctx.lineTo(x, y + 3);
+            ctx.stroke();
+        }
+
+        function drawElectronCloud(ctx, x, y) {
+            const gradient = ctx.createRadialGradient(x, y, 0, x, y, CLOUD_RADIUS);
+            gradient.addColorStop(0, 'rgba(96, 165, 250, 0.95)');
+            gradient.addColorStop(0.5, 'rgba(96, 165, 250, 0.45)');
+            gradient.addColorStop(1, 'rgba(96, 165, 250, 0)');
+            
+            ctx.beginPath();
+            ctx.arc(x, y, CLOUD_RADIUS, 0, Math.PI * 2);
+            ctx.fillStyle = gradient;
+            ctx.fill();
+        }
+
+        function drawFreeElectron(ctx, x, y) {
+            ctx.beginPath();
+            ctx.arc(x, y, ELECTRON_RADIUS, 0, Math.PI * 2);
+            ctx.fillStyle = '#3b82f6';
+            ctx.fill();
+            ctx.strokeStyle = 'white';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(x - 1.5, y);
+            ctx.lineTo(x + 1.5, y);
+            ctx.stroke();
+        }
+
+        function animate() {
+            dCtx.clearRect(0, 0, width, height);
+            cCtx.clearRect(0, 0, width, height);
+
+            const time = Date.now() / 1000;
+
+            dielectricAtoms.forEach(atom => {
+                const vibX = Math.sin(time * 10 + atom.phase) * 1.5;
+                const vibY = Math.cos(time * 11 + atom.phase) * 1.5;
+                drawElectronCloud(dCtx, atom.x + vibX, atom.y + vibY);
+                drawIonCore(dCtx, atom.x, atom.y);
+            });
+
+            conductorIons.forEach(ion => {
+                drawIonCore(cCtx, ion.x, ion.y);
+            });
+
+            freeElectrons.forEach(e => {
+                e.vx += (Math.random() - 0.5) * 1.5;
+                e.vy += (Math.random() - 0.5) * 1.5;
+                e.vx *= 0.85;
+                e.vy *= 0.85;
+                e.x += e.vx;
+                e.y += e.vy;
+
+                if (e.x < 0) e.x += width;
+                if (e.x > width) e.x -= width;
+                if (e.y < 0) e.y += height;
+                if (e.y > height) e.y -= height;
+
+                drawFreeElectron(cCtx, e.x, e.y);
+            });
+
+            requestAnimationFrame(animate);
+        }
+
+        window.addEventListener('resize', resize);
+        setTimeout(() => {
+            resize();
+            animate();
+        }, 50);
+    </script>
+</body>
+</html>

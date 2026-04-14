@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Atomic Polarization & Electric Dipole Simulation</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background-color: #f8fafc;
+        }
+        .slider-container {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+        input[type=range] {
+            -webkit-appearance: none;
+            width: 100%;
+            background: transparent;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 24px;
+            width: 24px;
+            border-radius: 50%;
+            background: #3b82f6;
+            cursor: pointer;
+            margin-top: -10px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            transition: transform 0.1s;
+        }
+        input[type=range]::-webkit-slider-thumb:hover {
+            transform: scale(1.1);
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 6px;
+            cursor: pointer;
+            background: #cbd5e1;
+            border-radius: 3px;
+        }
+        input[type=range]:focus {
+            outline: none;
+        }
+        svg text {
+            user-select: none;
+        }
+    </style>
+</head>
+<body class="min-h-screen text-slate-800 p-4 md:p-8 flex flex-col items-center">
+
+    <div class="max-w-4xl w-full bg-white rounded-2xl shadow-xl overflow-hidden border border-slate-200">
+        
+        <!-- Header -->
+        <div class="bg-slate-50 p-6 border-b border-slate-200">
+            <h1 class="text-2xl md:text-3xl font-bold text-slate-900 mb-2">Atomic Polarization in an Electric Field</h1>
+            <p class="text-slate-600 text-sm md:text-base">
+                Observe how an external electric field displaces the nucleus and the electron cloud of an atom, creating an induced electric dipole.
+            </p>
+        </div>
+
+        <!-- Controls -->
+        <div class="p-6 bg-white border-b border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-6">
+            <div class="w-full sm:w-2/3">
+                <label for="eFieldSlider" class="block text-sm font-semibold text-slate-700 mb-2">
+                    External Electric Field (<span class="text-blue-500 font-bold">E<sub>ext</sub></span>)
+                </label>
+                <div class="slider-container relative">
+                    <span class="text-sm font-medium text-slate-400 w-12 text-right">Left</span>
+                    <input type="range" id="eFieldSlider" min="-100" max="100" value="0" class="flex-grow">
+                    <span class="text-sm font-medium text-slate-400 w-12 text-left">Right</span>
+                </div>
+            </div>
+            
+            <div class="w-full sm:w-1/3 flex justify-center sm:justify-end">
+                <div class="bg-blue-50 rounded-lg p-3 px-5 border border-blue-100 shadow-inner flex flex-col items-center min-w-[120px]">
+                    <span class="text-xs text-blue-600 font-bold uppercase tracking-wider mb-1">Field Strength</span>
+                    <span id="fieldStrengthValue" class="text-2xl font-mono font-bold text-blue-800">0</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Simulation Canvas -->
+        <div class="relative w-full bg-white overflow-hidden flex justify-center border-b border-slate-200" style="min-height: 400px;">
+            <svg id="simSvg" viewBox="0 0 500 400" class="w-full h-full max-w-[500px]">
+                <defs>
+                    <!-- Electron Cloud Gradient -->
+                    <radialGradient id="cloudGrad" cx="50%" cy="50%" r="50%">
+                        <stop offset="0%" stop-color="#3b82f6" stop-opacity="0.9"/>
+                        <stop offset="60%" stop-color="#93c5fd" stop-opacity="0.6"/>
+                        <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
+                    </radialGradient>
+                    
+                    <!-- Nucleus Gradient -->
+                    <radialGradient id="nucGrad" cx="50%" cy="50%" r="50%">
+                        <stop offset="0%" stop-color="#ef4444"/>
+                        <stop offset="100%" stop-color="#dc2626"/>
+                    </radialGradient>
+
+                    <!-- Negative Charge Gradient -->
+                    <radialGradient id="negGrad" cx="30%" cy="30%" r="70%">
+                        <stop offset="0%" stop-color="#e2e8f0"/>
+                        <stop offset="100%" stop-color="#94a3b8"/>
+                    </radialGradient>
+
+                    <!-- Arrowheads -->
+                    <marker id="arrowhead-grid" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+                        <polygon points="0 0, 8 3, 0 6" fill="#7dd3fc" />
+                    </marker>
+                </defs>
+
+                <!-- SECTION 1: ATOM MODEL (Left Side) -->
+                
+                <!-- External E-Field Arrows Grid -->
+                <g id="eFieldArrows" opacity="0" stroke="#7dd3fc" stroke-width="2" stroke-linecap="round" fill="none">
+                    <!-- Arrows will be generated here by JavaScript -->
+                </g>
+
+                <!-- Field Label -->
+                <g id="eFieldLabelGroup" opacity="0">
+                    <text id="eFieldLabel" x="40" y="30" fill="#0284c7" font-size="22" font-weight="bold" font-family="serif" stroke="none">E</text>
+                    <!-- Small vector arrow over the E -->
+                    <path id="eLabelVector" d="M38 12 h12 m-4 -3 l4 3 l-4 3" stroke="#0284c7" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+                </g>
+
+                <!-- Atom Elements -->
+                <g id="atomBase">
+                    <!-- Electron Cloud -->
+                    <g id="electronCloud">
+                        <ellipse id="cloudShape" cx="250" cy="200" rx="110" ry="110" fill="url(#cloudGrad)"/>
+                    </g>
+                    
+                    <!-- Nucleus -->
+                    <g id="nucleus">
+                        <circle cx="250" cy="200" r="18" fill="url(#nucGrad)"/>
+                        <!-- Plus sign -->
+                        <path d="M244 200 h12 M250 194 v12" stroke="white" stroke-width="3.5" stroke-linecap="round"/>
+                    </g>
+                </g>
+
+                <!-- Dynamic Labels & Leader Lines for Atom -->
+                <g id="labels" stroke="#475569" stroke-width="1" fill="none">
+                    <!-- Nucleus Label -->
+                    <text x="130" y="80" fill="#1e293b" font-size="18" font-family="sans-serif" stroke="none" text-anchor="middle">Nucleus (positive)</text>
+                    <line id="nucLeader" x1="130" y1="88" x2="242" y2="190" stroke-dasharray="3,3" />
+                    
+                    <!-- Cloud Center Label -->
+                    <text x="130" y="320" fill="#1e293b" font-size="18" font-family="sans-serif" stroke="none" text-anchor="middle">Center of electron cloud (negative)</text>
+                    <line id="cloudLeader" x1="160" y1="305" x2="246" y2="204" stroke-dasharray="3,3" />
+
+                    <!-- Status Text Base -->
+                    <text id="statusText" x="250" y="380" fill="#334155" font-size="18" font-family="sans-serif" stroke="none" text-anchor="middle">External E<tspan baseline-shift="sub" font-size="12">ext</tspan> = 0</text>
+                </g>
+
+            </svg>
+        </div>
+
+        <!-- Explanation Footer -->
+        <div class="bg-slate-50 p-6 flex flex-col md:flex-row gap-6">
+            <div class="flex-1 bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+                <h3 class="font-bold text-slate-800 mb-2 flex items-center gap-2">
+                    <svg class="w-5 h-5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                    Mechanism
+                </h3>
+                <p class="text-sm text-slate-600 leading-relaxed">
+                    In the absence of an external electric field, the center of the negative electron cloud coincides with the positive nucleus. 
+                    When an external field (<strong class="text-blue-500">E</strong>) is applied, the positive nucleus is pushed in the direction of the field, while the negative electron cloud is pulled in the opposite direction.
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const slider = document.getElementById('eFieldSlider');
+        const fieldStrengthValue = document.getElementById('fieldStrengthValue');
+        const statusText = document.getElementById('statusText');
+        
+        // Atom Elements
+        const electronCloud = document.getElementById('electronCloud');
+        const cloudShape = document.getElementById('cloudShape');
+        const nucleus = document.getElementById('nucleus');
+        const nucLeader = document.getElementById('nucLeader');
+        const cloudLeader = document.getElementById('cloudLeader');
+        
+        // E-Field Grid Elements
+        const eFieldArrows = document.getElementById('eFieldArrows');
+        const eFieldLabelGroup = document.getElementById('eFieldLabelGroup');
+        const eLabelVector = document.getElementById('eLabelVector');
+        const arrowElements = [];
+
+        const BASE_X = 250;
+        const BASE_Y = 200;
+        const MAX_DISPLACEMENT = 35; // Max pixels elements can move from center
+        const MAX_GRID_FIELD_LENGTH = 65; // Max length of grid arrows
+
+        // Initialize Background Arrow Grid (5 columns x 4 rows)
+        function initGrid() {
+            for (let r = 0; r < 4; r++) {
+                for (let c = 0; c < 5; c++) {
+                    const cx = 50 + c * 100;
+                    const cy = 50 + r * 100;
+                    
+                    const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                    line.setAttribute('y1', cy);
+                    line.setAttribute('y2', cy);
+                    line.setAttribute('marker-end', 'url(#arrowhead-grid)');
+                    
+                    eFieldArrows.appendChild(line);
+                    arrowElements.push({ line, cx, cy });
+                }
+            }
+        }
+        
+        initGrid();
+
+        function updateSimulation() {
+            const rawValue = parseInt(slider.value);
+            fieldStrengthValue.textContent = Math.abs(rawValue);
+            
+            // Normalize value between -1 and 1
+            const normalizedE = rawValue / 100;
+            
+            // Calculate displacements
+            // If E > 0 (Right), Nucleus moves Right (positive X), Cloud moves Left (negative X)
+            const dxNuc = MAX_DISPLACEMENT * normalizedE;
+            const dxCloud = -MAX_DISPLACEMENT * normalizedE;
+
+            // 1. Update Atom Parts
+            nucleus.setAttribute('transform', `translate(${dxNuc}, 0)`);
+            electronCloud.setAttribute('transform', `translate(${dxCloud}, 0)`);
+
+            // Update Cloud Shape (Elongation)
+            const stretchX = 110 + (25 * Math.abs(normalizedE));
+            const shrinkY = 110 - (10 * Math.abs(normalizedE));
+            cloudShape.setAttribute('rx', stretchX);
+            cloudShape.setAttribute('ry', shrinkY);
+
+            // Update Leader Lines
+            nucLeader.setAttribute('x2', 242 + dxNuc);
+            nucLeader.setAttribute('y2', 190);
+            cloudLeader.setAttribute('x2', 246 + dxCloud);
+            cloudLeader.setAttribute('y2', 204);
+
+            // Update Status Text
+            if (rawValue === 0) {
+                statusText.innerHTML = `External E<tspan baseline-shift="sub" font-size="12">ext</tspan> = 0`;
+                eFieldArrows.setAttribute('opacity', '0');
+                eFieldLabelGroup.setAttribute('opacity', '0');
+            } else {
+                statusText.innerHTML = `External E<tspan baseline-shift="sub" font-size="12">ext</tspan> &ne; 0`;
+                
+                // Fade in grid based on field strength
+                const opacity = Math.min(1, Math.abs(normalizedE) * 1.5 + 0.1);
+                eFieldArrows.setAttribute('opacity', opacity);
+                eFieldLabelGroup.setAttribute('opacity', opacity);
+                
+                // 2. Update Grid Arrows
+                const arrowLength = MAX_GRID_FIELD_LENGTH * Math.abs(normalizedE);
+                
+                arrowElements.forEach(arrow => {
+                    let startX, endX;
+                    if (normalizedE > 0) {
+                        // Field points RIGHT
+                        startX = arrow.cx - arrowLength/2;
+                        endX = arrow.cx + arrowLength/2;
+                    } else {
+                        // Field points LEFT
+                        startX = arrow.cx + arrowLength/2;
+                        endX = arrow.cx - arrowLength/2;
+                    }
+                    arrow.line.setAttribute('x1', startX);
+                    arrow.line.setAttribute('x2', endX);
+                });
+
+                // Update 'E' vector label direction
+                if (normalizedE > 0) {
+                    eLabelVector.setAttribute('d', 'M38 12 h12 m-4 -3 l4 3 l-4 3'); // points right
+                } else {
+                    eLabelVector.setAttribute('d', 'M50 12 h-12 m4 -3 l-4 3 l4 3'); // points left
+                }
+            }
+        }
+
+        // Add event listener
+        slider.addEventListener('input', updateSimulation);
+        
+        // Initialize
+        updateSimulation();
+
+    </script>
+</body>
+</html>
